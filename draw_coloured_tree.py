@@ -1,4 +1,4 @@
-  #!/usr/bin/env python
+#!/usr/bin/env python
 # draw_coloured_tree.py   Written by: Mitchell Sullivan   mjsull@gmail.com
 # organisation: Icahn School of Medicine - Mount Sinai
 # Version 0.0.1 2016.01.19
