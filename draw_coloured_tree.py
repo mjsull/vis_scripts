@@ -32,7 +32,7 @@ def hsl_to_str(h, s, l):
     b = int(b * 255)
     return "#%x%x%x" % (r/16,g/16,b/16)
 
-
+# main function for drawing tree
 def draw_tree(the_tree, colour, label, out_file):
     t = Tree(the_tree)
     o = t.get_midpoint_outgroup()
