@@ -1183,14 +1183,14 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-q", "--query_genbank", help="Directory of potential references, will choose closest to query 1.", metavar="alignment.maf")
-parser.add_argument("-r", "--reference_genbank", help="Directory of potential references, will choose closest to query 1.", metavar="reference.fasta")
-parser.add_argument("-m", "--maf", help="File with phage sequence in it.")
-parser.add_argument("-n", "--number_of_genomes_in_maf", help="Two or more query sequences.", metavar="<query1.fa> <query2.fa> etc..")
-parser.add_argument("-p", "--paml_rst", help="Two or more query sequences.", metavar="<query1.fa> <query2.fa> etc..")
+parser.add_argument("-q", "--query_genbank", help="Genbank of query", metavar="query.gbk")
+parser.add_argument("-r", "--reference_genbank", help="Genbank of reference.", metavar="reference.gbk")
+parser.add_argument("-m", "--maf", help="multiple alignment file from Mugsy", metavar="mygenome.maf")
+parser.add_argument("-n", "--number_of_genomes_in_maf", help="Number of genomes in multiple alignment", metavar="<int>")
+parser.add_argument("-p", "--paml_rst", help="RST file produced by PAML", metavar="rst")
 parser.add_argument("-a", "--ancestor_number", help="number of ancestor - get from Tree in rst file PAML outputs")
-parser.add_argument("-o", "--out_file", help="working directory")
-parser.add_argument("-w", "--working_dir", help="path to mugsyenv.sh")
+parser.add_argument("-o", "--out_file", help="where to output table and SVG")
+parser.add_argument("-w", "--working_dir", help="Where to create nucmer output")
 args = parser.parse_args()
 
 if not args.paml_rst is None:
