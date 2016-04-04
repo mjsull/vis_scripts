@@ -492,6 +492,7 @@ def get_ancestral_sequence(rst, label):
 
 
 def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, genes2, first_seq, second_seq):
+    merge_snp_size = 5
     if not os.path.exists(working_dir):
         os.makedirs(working_dir)
     q_name = gbk2.split('/')[-1].split('.')[0]
@@ -506,264 +507,437 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
         out.write(first_seq)
     subprocess.Popen('nucmer --breaklen=20 --prefix=' + working_dir + '/' + r_name + '_' + q_name + ' ' +
                      working_dir + '/' + r_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('nucmer --breaklen=20 --maxmatch --nosimplify --prefix=' + working_dir + '/' + r_name + '_' + r_name + ' ' +
-                     working_dir + '/' + r_name + '.fa ' + working_dir + '/' + r_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('nucmer --breaklen=20 --maxmatch --nosimplify --prefix=' + working_dir + '/' + q_name + '_' + q_name + ' ' +
-                     working_dir + '/' + q_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('nucmer --breaklen=20 --prefix=' + working_dir + '/' + r_name + '_' + q_name + ' ' +
-                     working_dir + '/' + r_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
+    # subprocess.Popen('nucmer --breaklen=20 --maxmatch --nosimplify --prefix=' + working_dir + '/' + r_name + '_' + r_name + ' ' +
+    #                  working_dir + '/' + r_name + '.fa ' + working_dir + '/' + r_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
+    # subprocess.Popen('nucmer --breaklen=20 --maxmatch --nosimplify --prefix=' + working_dir + '/' + q_name + '_' + q_name + ' ' +
+    #                  working_dir + '/' + q_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
+    # subprocess.Popen('nucmer --breaklen=20 --prefix=' + working_dir + '/' + r_name + '_' + q_name + ' ' +
+    #                  working_dir + '/' + r_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('delta-filter -g ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' +
                      working_dir + '/' + r_name + '_' + q_name + '.filter.delta', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-snps -Tlr ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir + '/' + r_name + '_' + q_name + '.snps',
                      shell=True, stderr=subprocess.PIPE).wait()
+    subprocess.Popen('show-aligns -r ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir + '/' + r_name + '_' + q_name +
+                     '.align ' + r_name + ' ' + q_name,
+                     shell=True).wait()#, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir +
                      '/' + r_name + '_' + q_name + '.filtered.coords', shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' + working_dir + '/' +
-                     r_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + r_name + '.delta > ' + working_dir + '/' +
-                     r_name + '_' + r_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('show-coords -r ' + working_dir + '/' + q_name + '_' + q_name + '.delta > ' + working_dir + '/' +
-                     q_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('makeblastdb -dbtype nucl -in ' + working_dir + '/' + r_name + '.fa -out tempdb', shell=True, stdout=subprocess.PIPE).wait()
-    subprocess.Popen('blastn -outfmt 6 -out tempblast.out -query ' + working_dir + '/' + q_name + '.fa -db tempdb', shell=True).wait()
+    # subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' + working_dir + '/' +
+    #                  r_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
+    # subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + r_name + '.delta > ' + working_dir + '/' +
+    #                  r_name + '_' + r_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
+    # subprocess.Popen('show-coords -r ' + working_dir + '/' + q_name + '_' + q_name + '.delta > ' + working_dir + '/' +
+    #                  q_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
+    # subprocess.Popen('makeblastdb -dbtype nucl -in ' + working_dir + '/' + r_name + '.fa -out tempdb', shell=True, stdout=subprocess.PIPE).wait()
+    # subprocess.Popen('blastn -outfmt 6 -out tempblast.out -query ' + working_dir + '/' + q_name + '.fa -db tempdb', shell=True).wait()
     out_tsv = open(out_file, 'w')
+    out_tsv.write('\t'.join(['type', 'query_name', 'query_start', 'query_stop', 'reference_name', 'reference_start',
+                             'reference_stop', 'query base/size', 'reference base/size', 'ancestor_base_size',
+                             'type', 'in_gene_q', 'in_gene_r', 'overlap_gene_q', 'overlap_gene_r', 'contains_gene_q', 'contains_gene_r',
+                            'nearest_upstream_q', 'nearest_upstream_r', 'nearest_downstream_q', 'nearest_downstream_r']) + '\n')
     ignored_char = set(['N', '-'])
+    # with open(working_dir + '/' + r_name + '_' + q_name + '.align') as align:
+    #     qseq = ''
+    #     rseq = ''
+    #     count = -1
+    #     snp_count = 0
+    #     for line in align:
+    #         if line.startswith('-- BEGIN'):
+    #             r_orient = line.split()[4]
+    #             r_start = line.split()[5]
+    #             r_stop = line.split()[7]
+    #             q_orient = line.split()[9]
+    #             q_start = line.split()[10]
+    #             q_stop = line.split()[12]
+    #             count = 0
+    #         elif line.startswith('-- END'):
+    #             count = -1
+    #         elif count == 0:
+    #             snp_count += line.count('^')
+    #             count = 1
+    #         elif count == 1:
+    #             count = 2
+    #         elif count == 2:
+    #             count = 3
+    #             try:
+    #                 rseq += line.split()[1]
+    #             except IndexError:
+    #                 pass
+    #         elif count == 3:
+    #             count = 0
+    #             qseq += line.split()[1]
     with open(working_dir + '/' + r_name + '_' + q_name + '.snps') as snps:
         get_snp_lines = False
+        last_del = None
+        snp_list = []
         for line in snps:
             if line.startswith('[P1]'):
                 get_snp_lines = True
-            elif get_snp_lines and not anc_seq is None:
+            elif get_snp_lines:
                 pos1, b1, b2, pos2, buff, dist, rr, rq, lenr, lenq, fr, tag, name1, name2 = line.split()
                 the_pos1 = int(pos1)
                 the_pos2 = int(pos2)
-                for i in alignment.start_dict:
-                    if name1.startswith(i[:-5]):
-                        dict_name_1 = i
-                    if name2.startswith(i[:-5]):
-                        dict_name_2 = i
-                gotit = False
-                curr_seq_dict = {}
-                ancestor_base = None
-                for i in alignment.start_dict:
-                    curr_seq_dict[i] = ''
-                for i in range(len(alignment.start_dict[dict_name_1])):
-                    start1, stop1, strand1, seq1 = alignment.start_dict[dict_name_1][i], alignment.stop_dict[dict_name_1][i],\
-                                                   alignment.strand_dict[dict_name_1][i], alignment.seq_dict[dict_name_1][i]
-                    start2, stop2, strand2, seq2 = alignment.start_dict[dict_name_2][i], alignment.stop_dict[dict_name_2][i],\
-                                                   alignment.strand_dict[dict_name_2][i], alignment.seq_dict[dict_name_2][i]
-                    if b1 == '.' or b2 == '.':
-                        ancestor_base = 'indel'
-                    elif start1 <= the_pos1 <= stop1 and start2 <= the_pos2 <= stop2:
-                        gotit = True
-                        if strand1 == '+':
-                            a_pos = start1
-                            for j in range(len(seq1)):
-                                if seq1[j] != '-':
-                                    a_pos += 1
-                                    if a_pos == the_pos1:
-                                        pos_in_align = j
-                                        break
-                        else:
-                            for j in range(len(seq1)):
-                                if seq1[::-1][j] != '-':
-                                    a_pos += 1
-                                    if a_pos == the_pos1:
-                                        pos_in_align = len(seq1) - j
-                                        break
-                        if strand2 == '+':
-                            a_pos = start2
-                            for j in range(len(seq2)):
-                                if seq2[j] != '-':
-                                    a_pos += 1
-                                    if a_pos == the_pos2:
-                                        if j == pos_in_align:
-                                            for k in curr_seq_dict:
-                                                curr_seq_dict[k] += alignment.seq_dict[k][i][:pos_in_align+1]
-                                        else:
-                                            ancestor_base = 'ambiguous alignment'
-                                          #  sys.exit()
-                                        break
-                        else:
-                            for j in range(len(seq2)):
-                                if seq2[::-1][j] != '-':
-                                    a_pos += 1
-                                    if a_pos == the_pos2:
-                                        if len(seq2) - j == pos_in_align:
-                                            for k in curr_seq_dict:
-                                                curr_seq_dict[k] += alignment.seq_dict[k][i][:pos_in_align+1]
-                                        else:
-                                            ancestor_base = 'ambiguous alignment'
-                                           # sys.exit()
-                                        break
-                        paml_pos = 0
-                        lastdel = False
-                        if ancestor_base is None:
-                            for l in curr_seq_dict:
-                                if curr_seq_dict[l][-1] == '-':
-                                    lastdel = True
-                        if lastdel:
-                            ancestor_base = 'del_at_spot'
-                        elif ancestor_base is None:
-                            test_seq = {}
-                            for l in curr_seq_dict:
-                                test_seq[l] = ''
-                            for k in range(len(curr_seq_dict[dict_name_1])):
-                                inc_it = True
-                                for l in curr_seq_dict:
-                                    if curr_seq_dict[l][k] in ignored_char:
-                                        inc_it = False
-                                        break
-                                if inc_it:
-                                    paml_pos += 1
-                            ancestor_base = anc_seq[paml_pos-1]
-                        break
-                    elif start1 <= the_pos1 <= stop1 or start2 <= the_pos2 <= stop2:
-                        gotit = True
-                        ancestor_base = 'misaligned'
-                        break
+                if snp_list != [] and the_pos1 >= snp_list[-1][1] and the_pos2 >= snp_list[-1][3] and \
+                        (snp_list[-1][1] >= the_pos1 - merge_snp_size or snp_list[-1][3] >= the_pos2 - merge_snp_size):
+                    if snp_list[-1][0] == the_pos1:
+                        snp_list[-1][4] = '.'
                     else:
-                        for j in alignment.seq_dict:
-                            curr_seq_dict[j] += alignment.seq_dict[j][i]
-                if not gotit:
-                    ancestor_base = 'unaligned'
-                genes_affected = []
-                for i in genes1:
-                    if i.start <= int(pos1) <= i.stop:
-                        try:
-                            genes_affected.append(i.name)
-                        except AttributeError:
-                            genes_affected.append(i.locus)
-                        if len(ancestor_base) == 1 and ancestor_base != b1 and ancestor_base != b2:
-                            print ancestor_base, b1, b2, q_name
-                            print 'ancestor base not in either'
-                        elif b1 == ancestor_base:
-                            mod_seq = second_seq[:int(pos1)-1] + ancestor_base + second_seq[int(pos1):]
-                            if i.strand == '+':
-                                if translate_dna(second_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
-                                    mut_type = 'syn_ref'
-                                else:
-                                    mut_type = 'nonsyn_ref'
-                            else:
-                                if translate_dna(reverse_compliment(seq1[i.start-1:i.stop])) == \
-                                        translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
-                                    mut_type = 'syn_ref'
-                                else:
-                                    mut_type = 'nonsyn_ref'
-                        elif len(ancestor_base) == 1:
-                            mod_seq = first_seq[:int(pos1)-1] + ancestor_base + first_seq[int(pos1):]
-                            if i.strand == '+':
-                                if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
-                                    mut_type = 'syn_query'
-                                else:
-                                    mut_type = 'nonsyn_query'
-                            else:
-                                if translate_dna(reverse_compliment(seq1[i.start-1:i.stop])) == \
-                                        translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
-                                    mut_type = 'syn_query'
-                                else:
-                                    mut_type = 'nonsyn_query'
-                        elif b1 == '.':
-                            mut_type = 'deletion'
-                        elif b2 == '.':
-                            mut_type = 'insertion'
-                        else:
-                            mod_seq = first_seq[:int(pos1)-1] + b2 + first_seq[int(pos1):]
-                            if i.strand == '+':
-                                if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
-                                    mut_type = 'syn_amb'
-                                else:
-                                    mut_type = 'nonsyn_amb'
-                            else:
-                                if translate_dna(reverse_compliment(seq1[i.start-1:i.stop])) == \
-                                        translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
-                                    mut_type = 'syn_amb'
-                                else:
-                                    mut_type = 'nonsyn_amb'
-                if genes_affected == []:
-                    if b1 == ancestor_base:
-                        mut_type = 'intergenic_ref'
-                    elif b2 == ancestor_base:
-                        mut_type = 'intergenic_query'
+                        snp_list[-1][4] = first_seq[snp_list[-1][0]-1:the_pos1]
+                    if snp_list[-1][2] == the_pos2:
+                        snp_list[-1][5] = '.'
                     else:
-                        mut_type = 'intergenic_amb'
-                    genes_affected = ['none']
-                out_tsv.write('\t'.join(['snv', q_name, pos1, b1, r_name, pos2, b2, ancestor_base, mut_type, 'none', ','.join(genes_affected), 'none']) + '\n')
-            elif get_snp_lines:
-                pos1, b1, b2, pos2, buff, dist, rr, rq, lenr, lenq, fr, tag, name1, name2 = line.split()
-                genes_affected = []
-                for i in genes1:
-                    if i.start <= int(pos1) <= i.stop:
-                        try:
-                            genes_affected.append(i.name)
-                        except AttributeError:
-                            genes_affected.append(i.locus)
-                        if b1 == '.':
-                            mut_type = 'deletion'
-                        elif b2 == '.':
-                            mut_type = 'insertion'
+                        snp_list[-1][5] = second_seq[snp_list[-1][2]-1:the_pos2]
+                    snp_list[-1][1] = the_pos1
+                    snp_list[-1][3] = the_pos2
+                else:
+                    snp_list.append([the_pos1, the_pos1, the_pos2, the_pos2, b1, b2])
+    for snp in snp_list:
+        startpos1, endpos1, startpos2, endpos2, b1, b2 = snp
+        if not anc_seq is None:
+            for i in alignment.start_dict:
+                if name1.startswith(i[:-5]):
+                    dict_name_1 = i
+                if name2.startswith(i[:-5]):
+                    dict_name_2 = i
+            gotit = False
+            curr_seq_dict = {}
+            ancestor_base = None
+            if b1 == '.' or b2 == '.' or len(b1) != len(b2):
+                ancestor_base = 'indel'
+                continue
+            for i in alignment.start_dict:
+                curr_seq_dict[i] = ''
+            for i in range(len(alignment.start_dict[dict_name_1])):
+                start1, stop1, strand1, seq1 = alignment.start_dict[dict_name_1][i], alignment.stop_dict[dict_name_1][i],\
+                                               alignment.strand_dict[dict_name_1][i], alignment.seq_dict[dict_name_1][i]
+                start2, stop2, strand2, seq2 = alignment.start_dict[dict_name_2][i], alignment.stop_dict[dict_name_2][i],\
+                                               alignment.strand_dict[dict_name_2][i], alignment.seq_dict[dict_name_2][i]
+                if start1 <= startpos1 <= endpos1 <= stop1 and start2 <= startpos2 <= endpos2 <= stop2:
+                    gotit = True
+                    if strand1 == '+':
+                        a_pos = start1
+                        for j in range(len(seq1)):
+                            if seq1[j] != '-':
+                                a_pos += 1
+                                if a_pos == endpos1:
+                                    pos_in_align = j
+                                    break
+                    else:
+                        a_pos = start1
+                        for j in range(len(seq1)):
+                            if seq1[::-1][j] != '-':
+                                a_pos += 1
+                                if a_pos == endpos1:
+                                    pos_in_align = len(seq1) - j
+                                    break
+                    if strand2 == '+':
+                        a_pos = start2
+                        for j in range(len(seq2)):
+                            if seq2[j] != '-':
+                                a_pos += 1
+                                if a_pos == endpos2:
+                                    if j == pos_in_align:
+                                        for k in curr_seq_dict:
+                                            curr_seq_dict[k] += alignment.seq_dict[k][i][:pos_in_align+1]
+                                    else:
+                                        ancestor_base = 'ambiguous alignment'
+                                      #  sys.exit()
+                                    break
+                    else:
+                        a_pos = start2
+                        for j in range(len(seq2)):
+                            if seq2[::-1][j] != '-':
+                                a_pos += 1
+                                if a_pos == endpos2:
+                                    if len(seq2) - j == pos_in_align:
+                                        for k in curr_seq_dict:
+                                            curr_seq_dict[k] += alignment.seq_dict[k][i][:pos_in_align+1]
+                                    else:
+                                        ancestor_base = 'ambiguous alignment'
+                                       # sys.exit()
+                                    break
+                    paml_pos = 0
+                    lastdel = False
+                    var_size = endpos1 - startpos1 + 1
+                    if ancestor_base is None:
+                        for l in curr_seq_dict:
+                            if '-' in curr_seq_dict[l][-var_size:] == '-':
+                                lastdel = True
+                    if lastdel:
+                        ancestor_base = 'del_at_spot'
+                    elif ancestor_base is None:
+                        test_seq = {}
+                        for l in curr_seq_dict:
+                            test_seq[l] = ''
+                        for k in range(len(curr_seq_dict[dict_name_1])):
+                            inc_it = True
+                            for l in curr_seq_dict:
+                                if curr_seq_dict[l][k] in ignored_char:
+                                    inc_it = False
+                                    break
+                            if inc_it:
+                                paml_pos += 1
+                        ancestor_base = anc_seq[paml_pos-var_size:paml_pos]
+                    break
+                elif start1 <= startpos1 <= endpos1 <= stop1 or start2 <= startpos2 <= endpos2 <= stop2:
+                    gotit = True
+                    ancestor_base = 'misaligned'
+                    break
+                else:
+                    for j in alignment.seq_dict:
+                        curr_seq_dict[j] += alignment.seq_dict[j][i]
+            if not gotit:
+                ancestor_base = 'unaligned'
+        else:
+            ancestor_base = 'no_paml'
+        mut_type = None
+        in_q = []
+        cont_q = []
+        over_q = []
+        up_q = None
+        down_q = None
+        genes1.sort(key=lambda x:x.start)
+        genes2.sort(key=lambda x:x.start)
+        for i in genes1:
+            try:
+                genestring = i.name + ','
+            except:
+                genestring = 'none,'
+            genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(startpos1 - i.start)\
+            + '/' + str(i.stop - i.start)
+            if i.start <= startpos1 <= endpos1 <= i.stop:
+                if up_q is None:
+                    up_q = last_gene
+                in_q.append(genestring)
+                if len(ancestor_base) == 1 and ancestor_base != b1 and ancestor_base != b2:
+                    print ancestor_base, b1, b2, q_name
+                    print 'ancestor base not in either'
+                if b2 == ancestor_base:
+                    mod_seq = first_seq[:startpos1-1] + ancestor_base + first_seq[endpos1:]
+                    if i.strand == '+':
+                        if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
+                            mut_type = 'syn_query'
+                        elif '*' in translate_dna(mod_seq[i.start-1:i.stop])[:-1]:
+                            mut_type = 'stop_query'
                         else:
-                            mod_seq = first_seq[:int(pos1)-1] + b2 + first_seq[int(pos1):]
-                            if i.strand == '+':
-                                if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
-                                    mut_type = 'syn_amb'
-                                else:
-                                    mut_type = 'nonsyn_amb'
-                            else:
-                                if translate_dna(reverse_compliment(seq1[i.start-1:i.stop])) == \
-                                        translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
-                                    mut_type = 'syn_amb'
-                                else:
-                                    mut_type = 'nonsyn_amb'
-                if genes_affected == []:
-                    mut_type = 'intergenic_amb'
-                    genes_affected = ['none']
-                out_tsv.write('\t'.join(['snv', q_name, pos1, b1, r_name, pos2, b2, 'none', mut_type, 'none', ','.join(genes_affected), 'none']) + '\n')
-
+                            mut_type = 'nonsyn_query'
+                    else:
+                        if translate_dna(reverse_compliment(first_seq[i.start-1:i.stop])) == \
+                                translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
+                            mut_type = 'syn_query'
+                        elif '*' in translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1]:
+                            mut_type = 'stop_query'
+                        else:
+                            mut_type = 'nonsyn_query'
+                elif b1 == '.' and len(b2) % 3 == 0:
+                    mut_type = 'inframe_del_query'
+                elif b1 == '.':
+                    mut_type = 'deletion_query'
+                elif len(b1) < len(b2) and (len(b2) - len(b1)) % 3 == 0:
+                    mut_type = 'inframe_del_query'
+                elif len(b1) < len(b2):
+                    mut_type = 'deletion_query'
+                elif b2 == '.' and len(b1) % 3 == 0:
+                    mut_type = 'inframe_ins_query'
+                elif b2 == '.':
+                    mut_type = 'insertion_query'
+                elif len(b1) > len(b2) and (len(b1) - len(b2)) % 3 == 0:
+                    mut_type = 'inframe_ins_query'
+                elif len(b1) > len(b2):
+                    mut_type = 'insertion_query'
+                else:
+                    mod_seq = first_seq[:startpos1-1] + b2 + first_seq[endpos2:]
+                    if i.strand == '+':
+                        if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
+                            mut_type = 'syn_amb'
+                        else:
+                            mut_type = 'nonsyn_amb'
+                    else:
+                        if translate_dna(reverse_compliment(first_seq[i.start-1:i.stop])) == \
+                                translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
+                            mut_type = 'syn_amb'
+                        else:
+                            mut_type = 'nonsyn_amb'
+            elif startpos1 <= i.start <= i.stop <= endpos1:
+                if up_q is None:
+                    up_q = last_gene
+                cont_q.append(genestring)
+            elif i.start <= startpos1 <= i.stop or i.start <= endpos1 <= i.stop:
+                if up_q is None:
+                    up_q = last_gene
+                over_q.append(genestring)
+            elif i.start >= endpos1 and down_q is None:
+                if up_q is None:
+                    up_q = last_gene
+                down_q = genestring
+            if i.strand == '-':
+                last_gene = genestring
+        in_r = []
+        cont_r = []
+        over_r = []
+        up_r = None
+        down_r = None
+        for i in genes2:
+            try:
+                genestring = i.name + ','
+            except:
+                genestring = 'none,'
+            genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(startpos2 - i.start)\
+            + '/' + str(i.stop - i.start)
+            if i.start <= startpos2 <= endpos2 <= i.stop:
+                if up_r is None:
+                    up_r = last_gene
+                in_r.append(genestring)
+                if b1 == ancestor_base:
+                    mod_seq = second_seq[:startpos2-1] + ancestor_base + second_seq[endpos2:]
+                    if i.strand == '+':
+                        if translate_dna(second_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
+                            mut_type = 'syn_ref'
+                        elif '*' in translate_dna(mod_seq[i.start-1:i.stop])[:-1]:
+                            mut_type == 'nonsyn_ref_stop'
+                        else:
+                            mut_type = 'nonsyn_ref'
+                    else:
+                        if translate_dna(reverse_compliment(second_seq[i.start-1:i.stop])) == \
+                                translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
+                            mut_type = 'syn_ref'
+                        elif '*' in translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
+                            mut_type = 'nonsyn_ref_stop'
+                        else:
+                            mut_type = 'nonsyn_ref'
+                elif b1 == '.':
+                    mut_type = 'deletion_query'
+                elif b2 == '.':
+                    mut_type = 'insertion_query'
+            elif startpos2 <= i.start <= i.stop <= endpos2:
+                if up_r is None:
+                    up_r = last_gene
+                cont_r.append(genestring)
+            elif i.start <= startpos2 <= i.stop or i.start <= endpos2 <= i.stop:
+                if up_r is None:
+                    up_r = last_gene
+                over_r.append(genestring)
+            elif i.start >= endpos2 and down_r is None:
+                if up_r is None:
+                    up_r = last_gene
+                down_r = genestring
+            if i.strand == '-':
+                last_gene = genestring
+        if in_q == [] and in_r == []:
+            if b1 == ancestor_base:
+                mut_type = 'intergenic_ref'
+            elif b2 == ancestor_base:
+                mut_type = 'intergenic_query'
+            else:
+                mut_type = 'intergenic_amb'
+        elif mut_type is None and (in_q == [] or in_r is []):
+            mut_type = 'no_matching_genes'
+        if in_q == []:
+            in_q = ['none']
+        if in_r == []:
+            in_r = ['none']
+        if over_q == []:
+            over_q = ['none']
+        if over_r == []:
+            over_r = ['none']
+        if cont_q == []:
+            cont_q = ['none']
+        if cont_r == []:
+            cont_r = ['none']
+        out_tsv.write('\t'.join(map(str, ['Variant', q_name, startpos1, endpos1, r_name, startpos2, endpos2, b1, b2, ancestor_base, mut_type,
+                                 ';'.join(in_q), ';'.join(in_r), ';'.join(over_q), ';'.join(over_r), ';'.join(cont_q), ';'.join(cont_r),
+                                 up_q, up_r, down_q, down_r])) + '\n')
     with open(working_dir + '/' + r_name + '_' + q_name + '.filtered.coords') as coords:
         get_var_lines = False
         for line in coords:
             if line.startswith('================='):
                 get_var_lines = True
                 starts_align = None
+                last_end1 = None
+                last_end2 = None
             elif get_var_lines:
                 s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref = line.split()
                 s1, e1, s2, e2, len1, len2 = map(int, (s1, e1, s2, e2, len1, len2))
                 if e2 < s2:
-                    out_tsv.write('\t'.join(map(str, ['inversion', s1, e1, e2, s2])) + '\n')
+                    inversion = True
                     s2, e2 = e2, s2
-                edgegenes1, fullgenes1, edgegenes2, fullgenes2 = [], [], [], []
+                else:
+                    inversion = False
+                in_q = []
+                cont_q = []
+                over_q = []
+                up_q = None
+                down_q = None
+                in_r = []
+                cont_r = []
+                over_r = []
+                up_r = None
+                down_r = None
                 if not starts_align is None:
                     for i in genes1:
-                        if i.start <= last_end1 <= s1 <= i.stop or i.start <= s1 <= last_end1 <= i.stop:
-                            try:
-                                fullgenes1.append(i.name)
-                            except AttributeError:
-                                fullgenes1.append(i.locus)
+                        try:
+                            genestring = i.name + ','
+                        except:
+                            genestring = 'none,'
+                        genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s1 - i.start)\
+                        + '/' + str(i.stop - i.start)
+                        if i.start <= s1 <= last_end1 <= i.stop or i.start <= last_end1 <= s1 <= i.stop:
+                            if up_q is None:
+                                up_q = last_gene
+                            in_q.append(genestring)
+                        elif s1 <= i.start <= i.stop <= last_end1 or last_end1 <= i.start <= i.stop <= s1:
+                            if up_q is None:
+                                up_q = last_gene
+                            cont_q.append(genestring)
                         elif i.start <= s1 <= i.stop or i.start <= last_end1 <= i.stop:
-                            try:
-                                edgegenes1.append(i.name)
-                            except AttributeError:
-                                edgegenes1.append(i.locus)
+                            if up_q is None:
+                                up_q = last_gene
+                            over_q.append(genestring)
+                        elif i.start >= s1 and down_q is None:
+                            if up_q is None:
+                                up_q = last_gene
+                            down_q = genestring
+                        if i.strand == '-':
+                            last_gene = genestring
                     for i in genes2:
-                        if i.start <= last_end2 <= s2 <= i.stop or i.start <= s2 <= last_end2 <= i.stop:
-                            try:
-                                fullgenes2.append(i.name)
-                            except AttributeError:
-                                fullgenes1.append(i.locus)
+                        genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s2 - i.start)\
+                        + '/' + str(i.stop - i.start)
+                        try:
+                            genestring = i.name + ','
+                        except:
+                            genestring = 'none,'
+                        genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s1 - i.start)\
+                        + '/' + str(i.stop - i.start)
+                        if i.start <= s2 <= last_end2 <= i.stop or i.start <= last_end2 <= s2 <= i.stop:
+                            if up_r is None:
+                                up_r = last_gene
+                            in_q.append(genestring)
+                        elif s2 <= i.start <= i.stop <= last_end2 or last_end2 <= i.start <= i.stop <= s2:
+                            if up_r is None:
+                                up_r = last_gene
+                            cont_q.append(genestring)
                         elif i.start <= s2 <= i.stop or i.start <= last_end2 <= i.stop:
-                            try:
-                                edgegenes2.append(i.name)
-                            except AttributeError:
-                                edgegenes2.append(i.locus)
-                if edgegenes1 == []:
-                    edgegenes1 = ['none']
-                if edgegenes2 == []:
-                    edgegenes2 = ['none']
-                if fullgenes1 == []:
-                    fullgenes1 = ['none']
-                if fullgenes2 == []:
-                    fullgenes2 = ['none']
+                            if up_r is None:
+                                up_r = last_gene
+                            over_q.append(genestring)
+                        elif i.start >= s1 and down_q is None:
+                            if up_r is None:
+                                up_r = last_gene
+                            down_r = genestring
+                        if i.strand == '-':
+                            last_gene = genestring
+                if in_q == []:
+                    in_q = ['none']
+                if in_r == []:
+                    in_r = ['none']
+                if over_q == []:
+                    over_q = ['none']
+                if over_r == []:
+                    over_r = ['none']
+                if cont_q == []:
+                    cont_q = ['none']
+                if cont_r == []:
+                    cont_r = ['none']
                 if s1 == 1 and s2 == 1:
                     starts_align = True
                 elif s1 == 1 and starts_align is None:
@@ -773,30 +947,38 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                     starts_align = ('1 overhang', s1)
                     print '1 overhang'
                 elif starts_align is None:
+                    print 'mismatched start'
                     starts_align = ('mismatched start', s1, s2)
                 elif s1 == last_end1 + 1 and s2 > last_end2:
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, last_end1, s1, r_name, last_end2, s2, 'deletion in query',
-                                                      ','.join(edgegenes1), ','.join(fullgenes1), ','.join(edgegenes2), ','.join(fullgenes2)])) + '\n')
+                    svtype = 'deletion in query'
+                    p1, p2, p3, p4 = last_end1, s1, last_end2, s2
                 elif (s1 == last_end1 + 1 and s2 < last_end2) or (s2 <= last_end2 and s1 <= last_end1 and last_end2 - s2 > last_end1 - s1):
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, last_end1, s1, r_name, s2, last_end2, 'tandem expansion in query',
-                                                      ','.join(edgegenes1), ','.join(fullgenes1), ','.join(edgegenes2), ','.join(fullgenes2)])) + '\n')
+                    svtype = 'tandem expansion in query'
+                    p1, p2, p3, p4 = last_end1, s1, s2, last_end2
                 elif s2 == last_end2 + 1 and s1 > last_end1:
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, last_end1, s1, r_name, last_end2, s2, 'insertion in query',
-                                                      ','.join(edgegenes1), ','.join(fullgenes1), ','.join(edgegenes2), ','.join(fullgenes2)])) + '\n')
+                    svtype = 'insertion in query'
+                    p1, p2, p3, p4 =  last_end1, s1, last_end2, s2
                 elif (s2 == last_end2 + 1 and s1 < last_end1) or (s2 <= last_end2 and s1 <= last_end1 and last_end2 - s2 < last_end1 - s1):
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, s1, last_end1, r_name, s2, last_end2, 'tandem contraction in query',
-                                                      ','.join(edgegenes1), ','.join(fullgenes1), ','.join(edgegenes2), ','.join(fullgenes2)])) + '\n')
+                    svtype = 'tandem contraction in query'
+                    p1, p2, p3, p4 = s1, last_end1, s2, last_end2
                 elif s1 <= last_end1 and s2 > last_end2:
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, s1, last_end1, r_name, last_end2, s2, 'insertion in query (duplicated ends)',
-                                                      ','.join(edgegenes1), ','.join(fullgenes1), ','.join(edgegenes2), ','.join(fullgenes2)])) + '\n')
+                    svtype = 'deletion in query (duplicated ends)'
+                    p1, p2, p3, p4 = s1, last_end1, last_end2, s2
                 elif s2 <= last_end2 and s1 > last_end1:
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, last_end1, s1, r_name, s2, last_end2, 'deletion in query (duplicated ends)',
-                                                      ','.join(edgegenes1), ','.join(fullgenes1), ','.join(edgegenes2), ','.join(fullgenes2)])) + '\n')
+                    svtype = 'insertion in query (duplicated ends)'
+                    p1, p2, p3, p4 = last_end1, s1, s2, last_end2
                 elif s2 > last_end2 and s1 > last_end1:
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, last_end1, s1, r_name, last_end2, 'Variable region',
-                                                      ','.join(edgegenes1), ','.join(fullgenes1), ','.join(edgegenes2), ','.join(fullgenes2)])) + '\n')
+                    svtype = 'Variable region'
+                    p1, p2, p3, p4 = last_end1, s1, s2, last_end2
                 else:
-                    out_tsv.write('\t'.join(map(str, ['struct', last_end1, s1, last_end2, s2])) + '\n')
+                    svtype = 'struct'
+                    p1, p2, p3, p4 = last_end1, s1, last_end2, s2
+                if not last_end1 is None:
+                    out_tsv.write('\t'.join(map(str, ['SV', q_name, p1, p2, r_name, p3, p4, abs(p1 - p2), abs(p3 - p4), 'none', svtype,
+                                 ';'.join(in_q), ';'.join(in_r), ';'.join(over_q), ';'.join(over_r), ';'.join(cont_q), ';'.join(cont_r),
+                                 up_q, up_r, down_q, down_r])) + '\n')
+                if inversion:
+                    print "There is an inversion need ot fix code"
                 last_end2 = e2
                 last_end1 = e1
     out_tsv.close()
@@ -813,11 +995,12 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
     fig_width = 2000
     left_buffer = 300
     right_buffer = 800
+    snp_over = 10
     svg = scalableVectorGraphics(top_buffer + bottom_buffer + 2 * genome_thick + ygap, fig_width + left_buffer + right_buffer)
     max_width = max([length1, length2])
     colourDictQuery = {
-        'deletion':(176,122,37),
-        'insertion':(139,115,199),
+        'deletion_query':(176,122,37),
+        'insertion_query':(139,115,199),
         'syn_ref':(36,162,139),
         'nonsyn_ref':(36,162,139),
         'syn_query':(211,78,62),
@@ -826,11 +1009,14 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
         'nonsyn_amb':(90,150,50),
         'intergenic_ref':(36,162,139),
         'intergenic_query':(208,77,149),
-        'intergenic_amb':(208,77,149)
+        'intergenic_amb':(208,77,149),
+        'nonsyn_ref_stop':(139,115,199),
+        'nonsyn_query_stop':(176,122,37),
+        'no_matching_genes':(176,122,37)
     }
     colourDictRef = {
-        'deletion':(139,115,199),
-        'insertion':(176,122,37),
+        'deletion_query':(139,115,199),
+        'insertion_query':(176,122,37),
         'syn_ref':(211,78,62),
         'nonsyn_ref':(90,150,50),
         'syn_query':(36,162,139),
@@ -839,7 +1025,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
         'nonsyn_amb':(90,150,50),
         'intergenic_ref':(208,77,149),
         'intergenic_query':(36,162,139),
-        'intergenic_amb':(208,77,149)
+        'intergenic_amb':(208,77,149),
+        'nonsyn_ref_stop':(139,115,199),
+        'nonsyn_query_stop':(176,122,37),
+        'no_matching_genes':(176,122,37)
     }
     colourDictSV = {'deletion in query':(183,149,45),
                     'tandem expansion in query':((109,138,196), (208,85,72)),
@@ -855,25 +1044,25 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
     svg.writeString(r_name, left_buffer + fig_width + right_buffer/30, top_buffer + ygap + genome_thick + genome_thick*4/6, genome_thick/3)
     with open(diff_file) as df:
         for line in df:
-            if line.startswith('snv'):
-                stuff1, q_name, pos1, b1, r_name, pos2, b2, stuff2, mut_type, stuff3, genes_affected, stuff4 = line.split('\t')
-                pos1, pos2 = int(pos1), int(pos2)
-                x1 = int(pos1 * 1.0 / max_width * fig_width)
-                x2 = int(pos2 * 1.0 / max_width * fig_width)
+            if line.startswith('Variant'):
+                stuff1, q_name, pos1, pos2, r_name, pos3, pos4, b1, b2, anc_type, mut_type, genes1, genes2, genes3, genes4, genes5, genes6, genes7, genes8, genes9, genes10 = line.split('\t')
+                pos1, pos3 = int(pos1), int(pos3)
+                x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                x2 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
                 join_color = (120, 120, 120)
                 color1 = colourDictQuery[mut_type]
                 color2 = colourDictRef[mut_type]
                 svg.drawLine(x1, top_buffer + genome_thick, x2, top_buffer + genome_thick + ygap, join_thick, join_color)
-                svg.drawLine(x1, top_buffer, x1, top_buffer + genome_thick, snp_thick, color1)
-                svg.drawLine(x2, top_buffer + genome_thick + ygap, x2, top_buffer + 2 * genome_thick + ygap, snp_thick, color2)
+                svg.drawLine(x1, top_buffer - snp_over, x1, top_buffer + genome_thick, snp_thick, color1)
+                svg.drawLine(x2, top_buffer + genome_thick + ygap, x2, top_buffer + 2 * genome_thick + ygap + snp_over, snp_thick, color2)
             elif line.startswith('SV'):
-                stuff1, q_name, pos1, pos2, r_name, pos3, pos4,  the_type, genes1, genes2, genes3, genes4 = line.split('\t')
+                stuff1, q_name, pos1, pos2, r_name, pos3, pos4, b1, b2, anc_type, the_type, genes1, genes2, genes3, genes4, genes5, genes6, genes7, genes8, genes9, genes10 = line.split('\t')
                 pos1, pos2, pos3, pos4 = map(int, (pos1, pos2, pos3, pos4))
                 if the_type == 'deletion in query':
-                    x1 = int(pos1 * 1.0 / max_width * fig_width)
-                    x2 = int(pos2 * 1.0 / max_width * fig_width)
-                    x3 = int(pos3 * 1.0 / max_width * fig_width)
-                    x4 = int(pos4 * 1.0 / max_width * fig_width)
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
                     width = x4 - x3
                     if width < 1:
                         width = 1
@@ -883,10 +1072,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     color = colourDictSV[the_type]
                     svg.drawOutRect(x3, top_buffer + ygap + genome_thick, width, genome_thick, color, color, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'tandem expansion in query':
-                    x1 = int(pos1 * 1.0 / max_width * fig_width)
-                    x2 = int(pos2 * 1.0 / max_width * fig_width)
-                    x3 = int(pos3 * 1.0 / max_width * fig_width)
-                    x4 = int(pos4 * 1.0 / max_width * fig_width)
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
                     y1 = top_buffer + genome_thick + 3
                     y2 = top_buffer + genome_thick + ygap - 3
                     width1 = x2 - x1
@@ -901,10 +1090,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     svg.drawOutRect(x1, top_buffer, width1, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
                     svg.drawOutRect(x3, top_buffer + genome_thick + ygap, width2, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'insertion in query':
-                    x1 = int(pos1 * 1.0 / max_width * fig_width)
-                    x2 = int(pos2 * 1.0 / max_width * fig_width)
-                    x3 = int(pos3 * 1.0 / max_width * fig_width)
-                    x4 = int(pos4 * 1.0 / max_width * fig_width)
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
                     y1 = top_buffer + genome_thick + 3
                     y2 = top_buffer + genome_thick + ygap - 3
                     width = x2 - x1
@@ -914,10 +1103,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     color = colourDictSV[the_type]
                     svg.drawOutRect(x1, top_buffer, width, genome_thick, color, color, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'tandem contraction in query':
-                    x1 = int(pos1 * 1.0 / max_width * fig_width)
-                    x2 = int(pos2 * 1.0 / max_width * fig_width)
-                    x3 = int(pos3 * 1.0 / max_width * fig_width)
-                    x4 = int(pos4 * 1.0 / max_width * fig_width)
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
                     width1 = x2 - x1
                     if width1 < 1:
                         width1 = 1
@@ -932,10 +1121,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     svg.drawOutRect(x1, top_buffer, x2 - x1, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
                     svg.drawOutRect(x3, top_buffer + ygap + genome_thick, x4 - x3, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'insertion in query (duplicated ends)':
-                    x1 = int(pos1 * 1.0 / max_width * fig_width)
-                    x2 = int(pos2 * 1.0 / max_width * fig_width)
-                    x3 = int(pos3 * 1.0 / max_width * fig_width)
-                    x4 = int(pos4 * 1.0 / max_width * fig_width)
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
                     y1 = top_buffer + genome_thick
                     y2 = top_buffer + genome_thick + ygap
                     width1 = x2 - x1
@@ -952,10 +1141,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     svg.drawOutRect(x1, top_buffer, width1, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
                     svg.drawOutRect(x3, top_buffer + genome_thick + ygap, width2, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'deletion in query (duplicated ends)':
-                    x1 = int(pos1 * 1.0 / max_width * fig_width)
-                    x2 = int(pos2 * 1.0 / max_width * fig_width)
-                    x3 = int(pos3 * 1.0 / max_width * fig_width)
-                    x4 = int(pos4 * 1.0 / max_width * fig_width)
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
                     y1 = top_buffer + genome_thick
                     y2 = top_buffer + genome_thick + ygap
                     width1 = x2 - x1
@@ -972,12 +1161,13 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     svg.drawOutRect(x3 + width2, y2, width1, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
                     svg.drawOutRect(x3, y2, width2, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'Variable region':
-                    x1 = int(pos1 * 1.0 / max_width * fig_width)
-                    x2 = int(pos2 * 1.0 / max_width * fig_width)
-                    x3 = int(pos3 * 1.0 / max_width * fig_width)
-                    x4 = int(pos4 * 1.0 / max_width * fig_width)
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
                     y1 = top_buffer + genome_thick
                     y2 = top_buffer + genome_thick + ygap
+                    width1 = x2 - x1
                     if width1 < 1:
                         width1 = 1
                     width2 = x4 - x3
@@ -1003,9 +1193,12 @@ parser.add_argument("-o", "--out_file", help="working directory")
 parser.add_argument("-w", "--working_dir", help="path to mugsyenv.sh")
 args = parser.parse_args()
 
-
-anc_seq = get_ancestral_sequence(args.paml_rst, int(args.ancestor_number) - int(args.number_of_genomes_in_maf) - 1  )
-msa = get_alignments(args.maf, args.number_of_genomes_in_maf)
+if not args.paml_rst is None:
+    anc_seq = get_ancestral_sequence(args.paml_rst, int(args.ancestor_number) - int(args.number_of_genomes_in_maf) - 1)
+    msa = get_alignments(args.maf, args.number_of_genomes_in_maf)
+else:
+    anc_seq = None
+    msa = None
 genes1, seq1 = get_genes(args.query_genbank)
 genes2, seq2 = get_genes(args.reference_genbank)
 get_diff(args.query_genbank, args.reference_genbank, args.working_dir, args.out_file, msa, anc_seq, genes1, genes2, seq1, seq2)
