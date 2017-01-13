@@ -5,7 +5,8 @@ import os
 
 
 
-def colorstr(rgb): return "#%x%x%x" % (rgb[0],rgb[1],rgb[2])
+def colorstr(rgb): return "#%02x%02x%02x" % (rgb[0],rgb[1],rgb[2])
+
 
 def hsl_to_rgb(h, s, l):
     c = (1 - abs(2*l - 1)) * s
@@ -334,6 +335,8 @@ class scalableVectorGraphics:
 ;line-height:125%%;letter-spacing:0px;word-spacing:0px;fill:#111111;fill-opacity:1;stroke:none;font-family:Sans"\n' % size
         if justify == 'right':
             self.out += '    text-anchor="end"\n'
+        elif justify == 'middle':
+            self.out += '    text-anchor="middle"\n'
         if rotate == 1:
             self.out += '    x="-%d"\n' % x
         else:
@@ -515,13 +518,21 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
     #                  working_dir + '/' + r_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('delta-filter -g ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' +
                      working_dir + '/' + r_name + '_' + q_name + '.filter.delta', shell=True, stderr=subprocess.PIPE).wait()
+    subprocess.Popen('delta-filter -r ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' +
+                     working_dir + '/' + r_name + '_' + q_name + '.r.filter.delta', shell=True, stderr=subprocess.PIPE).wait()
+    subprocess.Popen('delta-filter -q ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' +
+                     working_dir + '/' + r_name + '_' + q_name + '.q.filter.delta', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-snps -Tlr ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir + '/' + r_name + '_' + q_name + '.snps',
                      shell=True, stderr=subprocess.PIPE).wait()
-    subprocess.Popen('show-aligns -r ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir + '/' + r_name + '_' + q_name +
-                     '.align ' + r_name + ' ' + q_name,
-                     shell=True).wait()#, stderr=subprocess.PIPE).wait()
+    # subprocess.Popen('show-aligns -r ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir + '/' + r_name + '_' + q_name +
+    #                  '.align ' + r_name + ' ' + q_name,
+    #                  shell=True).wait()#, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir +
                      '/' + r_name + '_' + q_name + '.filtered.coords', shell=True, stderr=subprocess.PIPE).wait()
+    subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.r.filter.delta > ' + working_dir +
+                     '/' + r_name + '_' + q_name + '.r.filtered.coords', shell=True, stderr=subprocess.PIPE).wait()
+    subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.q.filter.delta > ' + working_dir +
+                     '/' + r_name + '_' + q_name + '.q.filtered.coords', shell=True, stderr=subprocess.PIPE).wait()
     # subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' + working_dir + '/' +
     #                  r_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
     # subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + r_name + '.delta > ' + working_dir + '/' +
@@ -529,7 +540,7 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
     # subprocess.Popen('show-coords -r ' + working_dir + '/' + q_name + '_' + q_name + '.delta > ' + working_dir + '/' +
     #                  q_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
     # subprocess.Popen('makeblastdb -dbtype nucl -in ' + working_dir + '/' + r_name + '.fa -out tempdb', shell=True, stdout=subprocess.PIPE).wait()
-    # subprocess.Popen('blastn -outfmt 6 -out tempblast.out -query ' + working_dir + '/' + q_name + '.fa -db tempdb', shell=True).wait()
+    # subprocess.Popen('blastn -outfmt 6 -out ' + q_name + '_' + r_name + '.blast  -query ' + working_dir + '/' + q_name + '.fa -db tempdb', shell=True).wait()
     out_tsv = open(out_file, 'w')
     out_tsv.write('\t'.join(['type', 'query_name', 'query_start', 'query_stop', 'reference_name', 'reference_start',
                              'reference_stop', 'query base/size', 'reference base/size', 'ancestor_base_size',
@@ -582,18 +593,21 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                     if snp_list[-1][0] == the_pos1:
                         snp_list[-1][4] = '.'
                     else:
-                        snp_list[-1][4] = first_seq[snp_list[-1][0]-1:the_pos1]
+                        snp_list[-1][4] = first_seq[snp_list[-1][0]-1:the_pos1].upper()
                     if snp_list[-1][2] == the_pos2:
                         snp_list[-1][5] = '.'
                     else:
-                        snp_list[-1][5] = second_seq[snp_list[-1][2]-1:the_pos2]
+                        snp_list[-1][5] = second_seq[snp_list[-1][2]-1:the_pos2].upper()
                     snp_list[-1][1] = the_pos1
                     snp_list[-1][3] = the_pos2
                 else:
                     snp_list.append([the_pos1, the_pos1, the_pos2, the_pos2, b1, b2])
+    dna_file = open(out_file + '.faa', 'w')
     for snp in snp_list:
         startpos1, endpos1, startpos2, endpos2, b1, b2 = snp
-        if not anc_seq is None:
+        if b1 == '.' or b2 == '.' or len(b1) != len(b2):
+            ancestor_base = 'indel'
+        elif not anc_seq is None:
             for i in alignment.start_dict:
                 if name1.startswith(i[:-5]):
                     dict_name_1 = i
@@ -602,9 +616,6 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
             gotit = False
             curr_seq_dict = {}
             ancestor_base = None
-            if b1 == '.' or b2 == '.' or len(b1) != len(b2):
-                ancestor_base = 'indel'
-                continue
             for i in alignment.start_dict:
                 curr_seq_dict[i] = ''
             for i in range(len(alignment.start_dict[dict_name_1])):
@@ -661,7 +672,7 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                     var_size = endpos1 - startpos1 + 1
                     if ancestor_base is None:
                         for l in curr_seq_dict:
-                            if '-' in curr_seq_dict[l][-var_size:] == '-':
+                            if '-' in curr_seq_dict[l][-var_size:]:
                                 lastdel = True
                     if lastdel:
                         ancestor_base = 'del_at_spot'
@@ -698,6 +709,7 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
         down_q = None
         genes1.sort(key=lambda x:x.start)
         genes2.sort(key=lambda x:x.start)
+        last_gene = 'none'
         for i in genes1:
             try:
                 genestring = i.name + ','
@@ -718,17 +730,21 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                         if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
                             mut_type = 'syn_query'
                         elif '*' in translate_dna(mod_seq[i.start-1:i.stop])[:-1]:
-                            mut_type = 'stop_query'
+                            mut_type = 'nonsyn_query_stop'
                         else:
                             mut_type = 'nonsyn_query'
+                            dna_file.write('>' + i.locus + ',que,' + str(startpos2) + '\n' + translate_dna(first_seq[i.start-1:i.stop])[:-1] + '\n')
+                            dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(mod_seq[i.start-1:i.stop])[:-1] + '\n')
                     else:
                         if translate_dna(reverse_compliment(first_seq[i.start-1:i.stop])) == \
                                 translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
                             mut_type = 'syn_query'
                         elif '*' in translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1]:
-                            mut_type = 'stop_query'
+                            mut_type = 'nonsyn_query_stop'
                         else:
                             mut_type = 'nonsyn_query'
+                            dna_file.write('>' + i.locus + ',que,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(first_seq[i.start-1:i.stop]))[:-1] + '\n')
+                            dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1] + '\n')
                 elif b1 == '.' and len(b2) % 3 == 0:
                     mut_type = 'inframe_del_query'
                 elif b1 == '.':
@@ -746,7 +762,7 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                 elif len(b1) > len(b2):
                     mut_type = 'insertion_query'
                 else:
-                    mod_seq = first_seq[:startpos1-1] + b2 + first_seq[endpos2:]
+                    mod_seq = first_seq[:startpos1-1] + b2 + first_seq[endpos1:]
                     if i.strand == '+':
                         if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
                             mut_type = 'syn_amb'
@@ -769,7 +785,8 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
             elif i.start >= endpos1 and down_q is None:
                 if up_q is None:
                     up_q = last_gene
-                down_q = genestring
+                if i.strand == '+':
+                    down_q = genestring
             if i.strand == '-':
                 last_gene = genestring
         in_r = []
@@ -777,6 +794,7 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
         over_r = []
         up_r = None
         down_r = None
+        last_gene = 'none'
         for i in genes2:
             try:
                 genestring = i.name + ','
@@ -796,14 +814,18 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                         elif '*' in translate_dna(mod_seq[i.start-1:i.stop])[:-1]:
                             mut_type == 'nonsyn_ref_stop'
                         else:
+                            dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(second_seq[i.start-1:i.stop])[:-1] + '\n')
+                            dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(mod_seq[i.start-1:i.stop])[:-1] + '\n')
                             mut_type = 'nonsyn_ref'
                     else:
                         if translate_dna(reverse_compliment(second_seq[i.start-1:i.stop])) == \
                                 translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
                             mut_type = 'syn_ref'
-                        elif '*' in translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
+                        elif '*' in translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1]:
                             mut_type = 'nonsyn_ref_stop'
                         else:
+                            dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(second_seq[i.start-1:i.stop]))[:-1] + '\n')
+                            dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1] + '\n')
                             mut_type = 'nonsyn_ref'
                 elif b1 == '.':
                     mut_type = 'deletion_query'
@@ -820,7 +842,8 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
             elif i.start >= endpos2 and down_r is None:
                 if up_r is None:
                     up_r = last_gene
-                down_r = genestring
+                if i.strand == '+':
+                    down_r = genestring
             if i.strand == '-':
                 last_gene = genestring
         if in_q == [] and in_r == []:
@@ -844,10 +867,11 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
             cont_q = ['none']
         if cont_r == []:
             cont_r = ['none']
-        out_tsv.write('\t'.join(map(str, ['Variant', q_name, startpos1, endpos1, r_name, startpos2, endpos2, b1, b2, ancestor_base, mut_type,
+        out_tsv.write('\t'.join(map(str, ['Variant', r_name, startpos1, endpos1, q_name, startpos2, endpos2, b1, b2, ancestor_base, mut_type,
                                  ';'.join(in_q), ';'.join(in_r), ';'.join(over_q), ';'.join(over_r), ';'.join(cont_q), ';'.join(cont_r),
                                  up_q, up_r, down_q, down_r])) + '\n')
-    with open(working_dir + '/' + r_name + '_' + q_name + '.filtered.coords') as coords:
+    q_coords = []
+    with open(working_dir + '/' + r_name + '_' + q_name + '.q.filtered.coords') as coords:
         get_var_lines = False
         for line in coords:
             if line.startswith('================='):
@@ -858,129 +882,160 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
             elif get_var_lines:
                 s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref = line.split()
                 s1, e1, s2, e2, len1, len2 = map(int, (s1, e1, s2, e2, len1, len2))
-                if e2 < s2:
-                    inversion = True
-                    s2, e2 = e2, s2
-                else:
-                    inversion = False
-                in_q = []
-                cont_q = []
-                over_q = []
-                up_q = None
-                down_q = None
-                in_r = []
-                cont_r = []
-                over_r = []
-                up_r = None
-                down_r = None
-                if not starts_align is None:
-                    for i in genes1:
-                        try:
-                            genestring = i.name + ','
-                        except:
-                            genestring = 'none,'
-                        genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s1 - i.start)\
-                        + '/' + str(i.stop - i.start)
-                        if i.start <= s1 <= last_end1 <= i.stop or i.start <= last_end1 <= s1 <= i.stop:
-                            if up_q is None:
-                                up_q = last_gene
-                            in_q.append(genestring)
-                        elif s1 <= i.start <= i.stop <= last_end1 or last_end1 <= i.start <= i.stop <= s1:
-                            if up_q is None:
-                                up_q = last_gene
-                            cont_q.append(genestring)
-                        elif i.start <= s1 <= i.stop or i.start <= last_end1 <= i.stop:
-                            if up_q is None:
-                                up_q = last_gene
-                            over_q.append(genestring)
-                        elif i.start >= s1 and down_q is None:
-                            if up_q is None:
-                                up_q = last_gene
-                            down_q = genestring
-                        if i.strand == '-':
-                            last_gene = genestring
-                    for i in genes2:
-                        genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s2 - i.start)\
-                        + '/' + str(i.stop - i.start)
-                        try:
-                            genestring = i.name + ','
-                        except:
-                            genestring = 'none,'
-                        genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s1 - i.start)\
-                        + '/' + str(i.stop - i.start)
-                        if i.start <= s2 <= last_end2 <= i.stop or i.start <= last_end2 <= s2 <= i.stop:
-                            if up_r is None:
-                                up_r = last_gene
-                            in_q.append(genestring)
-                        elif s2 <= i.start <= i.stop <= last_end2 or last_end2 <= i.start <= i.stop <= s2:
-                            if up_r is None:
-                                up_r = last_gene
-                            cont_q.append(genestring)
-                        elif i.start <= s2 <= i.stop or i.start <= last_end2 <= i.stop:
-                            if up_r is None:
-                                up_r = last_gene
-                            over_q.append(genestring)
-                        elif i.start >= s1 and down_q is None:
-                            if up_r is None:
-                                up_r = last_gene
-                            down_r = genestring
-                        if i.strand == '-':
-                            last_gene = genestring
-                if in_q == []:
-                    in_q = ['none']
-                if in_r == []:
-                    in_r = ['none']
-                if over_q == []:
-                    over_q = ['none']
-                if over_r == []:
-                    over_r = ['none']
-                if cont_q == []:
-                    cont_q = ['none']
-                if cont_r == []:
-                    cont_r = ['none']
-                if s1 == 1 and s2 == 1:
-                    starts_align = True
-                elif s1 == 1 and starts_align is None:
-                    starts_align = ('2 overhang', s2)
-                    print '2 overhang'
-                elif s2 == 1 and starts_align is None:
-                    starts_align = ('1 overhang', s1)
-                    print '1 overhang'
-                elif starts_align is None:
-                    print 'mismatched start'
-                    starts_align = ('mismatched start', s1, s2)
-                elif s1 == last_end1 + 1 and s2 > last_end2:
-                    svtype = 'deletion in query'
-                    p1, p2, p3, p4 = last_end1, s1, last_end2, s2
-                elif (s1 == last_end1 + 1 and s2 < last_end2) or (s2 <= last_end2 and s1 <= last_end1 and last_end2 - s2 > last_end1 - s1):
-                    svtype = 'tandem expansion in query'
-                    p1, p2, p3, p4 = last_end1, s1, s2, last_end2
-                elif s2 == last_end2 + 1 and s1 > last_end1:
-                    svtype = 'insertion in query'
-                    p1, p2, p3, p4 =  last_end1, s1, last_end2, s2
-                elif (s2 == last_end2 + 1 and s1 < last_end1) or (s2 <= last_end2 and s1 <= last_end1 and last_end2 - s2 < last_end1 - s1):
-                    svtype = 'tandem contraction in query'
-                    p1, p2, p3, p4 = s1, last_end1, s2, last_end2
-                elif s1 <= last_end1 and s2 > last_end2:
-                    svtype = 'deletion in query (duplicated ends)'
-                    p1, p2, p3, p4 = s1, last_end1, last_end2, s2
-                elif s2 <= last_end2 and s1 > last_end1:
-                    svtype = 'insertion in query (duplicated ends)'
-                    p1, p2, p3, p4 = last_end1, s1, s2, last_end2
-                elif s2 > last_end2 and s1 > last_end1:
-                    svtype = 'Variable region'
-                    p1, p2, p3, p4 = last_end1, s1, s2, last_end2
-                else:
-                    svtype = 'struct'
-                    p1, p2, p3, p4 = last_end1, s1, last_end2, s2
-                if not last_end1 is None:
-                    out_tsv.write('\t'.join(map(str, ['SV', q_name, p1, p2, r_name, p3, p4, abs(p1 - p2), abs(p3 - p4), 'none', svtype,
-                                 ';'.join(in_q), ';'.join(in_r), ';'.join(over_q), ';'.join(over_r), ';'.join(cont_q), ';'.join(cont_r),
-                                 up_q, up_r, down_q, down_r])) + '\n')
-                if inversion:
-                    print "There is an inversion need ot fix code"
-                last_end2 = e2
-                last_end1 = e1
+                q_coords.append((s1, e1, s2, e2, len1, len2))
+    r_coords = []
+    with open(working_dir + '/' + r_name + '_' + q_name + '.r.filtered.coords') as coords:
+        get_var_lines = False
+        for line in coords:
+            if line.startswith('================='):
+                get_var_lines = True
+                starts_align = None
+                last_end1 = None
+                last_end2 = None
+            elif get_var_lines:
+                s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref = line.split()
+                s1, e1, s2, e2, len1, len2 = map(int, (s1, e1, s2, e2, len1, len2))
+                r_coords.append((s1, e1, s2, e2, len1, len2))
+    with open(working_dir + '/' + r_name + '_' + q_name + '.filtered.coords') as coords:
+        get_var_lines = False
+        the_coords = []
+        for line in coords:
+            if line.startswith('================='):
+                get_var_lines = True
+                starts_align = None
+                last_end1 = None
+                last_end2 = None
+            elif get_var_lines:
+                s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref = line.split()
+                s1, e1, s2, e2, len1, len2 = map(int, (s1, e1, s2, e2, len1, len2))
+                the_coords.append((s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref))
+        print len(first_seq), e1, len(second_seq), e2
+        if e1 != len(first_seq) or e2 != len(second_seq):
+            print len(first_seq), e1, len(second_seq), e2
+    for line in the_coords:
+        s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref = line
+        in_q = []
+        cont_q = []
+        over_q = []
+        up_q = None
+        down_q = None
+        in_r = []
+        cont_r = []
+        over_r = []
+        up_r = None
+        down_r = None
+        last_gene = 'none'
+        if not starts_align is None:
+            for i in genes1:
+                try:
+                    genestring = i.name + ','
+                except:
+                    genestring = 'none,'
+                genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s1 - i.start)\
+                + '/' + str(i.stop - i.start)
+                if i.start <= s1 <= last_end1 <= i.stop or i.start <= last_end1 <= s1 <= i.stop:
+                    if up_q is None:
+                        up_q = last_gene
+                    in_q.append(genestring)
+                elif s1 <= i.start <= i.stop <= last_end1 or last_end1 <= i.start <= i.stop <= s1:
+                    if up_q is None:
+                        up_q = last_gene
+                    cont_q.append(genestring)
+                elif i.start <= s1 <= i.stop or i.start <= last_end1 <= i.stop:
+                    if up_q is None:
+                        up_q = last_gene
+                    over_q.append(genestring)
+                elif i.start >= s1 and down_q is None:
+                    if up_q is None:
+                        up_q = last_gene
+                    if i.strand == '+':
+                        down_q = genestring
+                if i.strand == '-':
+                    last_gene = genestring
+            for i in genes2:
+                try:
+                    genestring = i.name + ','
+                except:
+                    genestring = 'none,'
+                genestring += i.locus + ',' + i.strand + ',' + str(i.start) + '..' + str(i.stop) + ',' + str(s2 - i.start)\
+                + '/' + str(i.stop - i.start)
+                if i.start <= s2 <= last_end2 <= i.stop or i.start <= last_end2 <= s2 <= i.stop:
+                    if up_r is None:
+                        up_r = last_gene
+                    in_r.append(genestring)
+                elif s2 <= i.start <= i.stop <= last_end2 or last_end2 <= i.start <= i.stop <= s2:
+                    if up_r is None:
+                        up_r = last_gene
+                    cont_r.append(genestring)
+                elif i.start <= s2 <= i.stop or i.start <= last_end2 <= i.stop:
+                    if up_r is None:
+                        up_r = last_gene
+                    over_r.append(genestring)
+                elif i.start >= s2 and down_r is None:
+                    if up_r is None:
+                        up_r = last_gene
+                    if i.strand == '+':
+                        down_r = genestring
+                if i.strand == '-':
+                    last_gene = genestring
+        if in_q == []:
+            in_q = ['none']
+        if in_r == []:
+            in_r = ['none']
+        if over_q == []:
+            over_q = ['none']
+        if over_r == []:
+            over_r = ['none']
+        if cont_q == []:
+            cont_q = ['none']
+        if cont_r == []:
+            cont_r = ['none']
+        if s1 == 1 and s2 == 1:
+            starts_align = True
+        elif s1 == 1 and starts_align is None:
+            starts_align = ('2 overhang', s2)
+            print '2 overhang'
+        elif s2 == 1 and starts_align is None:
+            starts_align = ('1 overhang', s1)
+            print '1 overhang'
+        elif starts_align is None:
+            print 'mismatched start'
+            starts_align = ('mismatched start', s1, s2)
+        elif s1 == last_end1 + 1 and s2 > last_end2:
+            svtype = 'deletion in query'
+            p1, p2, p3, p4 = last_end1, s1, last_end2, s2
+        elif (s1 == last_end1 + 1 and s2 < last_end2) or (s2 <= last_end2 and s1 <= last_end1 and last_end2 - s2 > last_end1 - s1):
+            svtype = 'tandem expansion in query'
+            p1, p2, p3, p4 = last_end1, s1, s2, last_end2
+        elif s2 == last_end2 + 1 and s1 > last_end1:
+            svtype = 'insertion in query'
+            p1, p2, p3, p4 =  last_end1, s1, last_end2, s2
+        elif (s2 == last_end2 + 1 and s1 < last_end1) or (s2 <= last_end2 and s1 <= last_end1 and last_end2 - s2 < last_end1 - s1):
+            svtype = 'tandem contraction in query'
+            p1, p2, p3, p4 = s1, last_end1, s2, last_end2
+        elif s1 <= last_end1 and s2 > last_end2:
+            svtype = 'deletion in query (duplicated ends)'
+            p1, p2, p3, p4 = s1, last_end1, last_end2, s2
+        elif s2 <= last_end2 and s1 > last_end1:
+            svtype = 'insertion in query (duplicated ends)'
+            p1, p2, p3, p4 = last_end1, s1, s2, last_end2
+        elif s2 > last_end2 and s1 > last_end1:
+            svtype = None
+            for i in q_coords:
+                if i[0] <= last_end1 + 1 and i[1] >= s1 - 1 and i[3] <= last_end2 + 1 and i[2] >= s2 - 1:
+                    svtype = 'inversion'
+            if svtype is None:
+                svtype = 'Variable region'
+            p1, p2, p3, p4 = last_end1, s1, last_end2, s2
+        else:
+            svtype = 'struct'
+            p1, p2, p3, p4 = last_end1, s1, last_end2, s2
+        if not last_end1 is None:
+            out_tsv.write('\t'.join(map(str, ['SV', r_name, p1, p2, q_name, p3, p4, abs(p1 - p2), abs(p3 - p4), 'none', svtype,
+                         ';'.join(in_q), ';'.join(in_r), ';'.join(over_q), ';'.join(over_r), ';'.join(cont_q), ';'.join(cont_r),
+                         up_q, up_r, down_q, down_r])) + '\n')
+        last_end2 = e2
+        last_end1 = e1
     out_tsv.close()
 
 
@@ -988,73 +1043,159 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
     top_buffer = 300
     bottom_buffer = 600
     ygap = 75
-    genome_thick = 75
+    genome_thick = 25
     snp_thick = 5
     sv_thick = 4
     join_thick = 2
     fig_width = 2000
     left_buffer = 300
     right_buffer = 800
-    snp_over = 10
     svg = scalableVectorGraphics(top_buffer + bottom_buffer + 2 * genome_thick + ygap, fig_width + left_buffer + right_buffer)
-    max_width = max([length1, length2])
-    colourDictQuery = {
-        'deletion_query':(176,122,37),
-        'insertion_query':(139,115,199),
-        'syn_ref':(36,162,139),
-        'nonsyn_ref':(36,162,139),
-        'syn_query':(211,78,62),
-        'nonsyn_query':(90,150,50),
-        'syn_amb':(211,78,62),
-        'nonsyn_amb':(90,150,50),
-        'intergenic_ref':(36,162,139),
-        'intergenic_query':(208,77,149),
-        'intergenic_amb':(208,77,149),
-        'nonsyn_ref_stop':(139,115,199),
-        'nonsyn_query_stop':(176,122,37),
-        'no_matching_genes':(176,122,37)
+    max_width = 3000000
+    highlight = 'query'
+    anc_base_col = (193,130,45)
+    anc_base_col_high = (245, 232, 214)
+    anc_base_col_low = (245, 232, 214)
+    nonsyn_col = (177, 98, 183)
+    nonsyn_col_high = (135, 64, 140)
+    nonsyn_col_low = (238, 220, 239)
+    syn_col = (90, 147, 191)
+    syn_col_low = (218, 231, 241)
+    syn_col_high = (57, 108, 147)
+    if highlight == 'query':
+        colourDictQuery = {
+            'deletion_query':nonsyn_col,
+            'insertion_query':nonsyn_col,
+            'syn_ref':anc_base_col_low,
+            'nonsyn_ref':anc_base_col_low,
+            'syn_query':syn_col_high,
+            'nonsyn_query':nonsyn_col_high,
+            'syn_amb':syn_col,
+            'nonsyn_amb':nonsyn_col,
+            'intergenic_ref':anc_base_col_low,
+            'intergenic_query':syn_col_high,
+            'intergenic_amb':syn_col,
+            'nonsyn_ref_stop':anc_base_col_low,
+            'nonsyn_query_stop':nonsyn_col_high,
+            'no_matching_genes':nonsyn_col
+        }
+        colourDictRef = {
+            'deletion_query':nonsyn_col,
+            'insertion_query':nonsyn_col,
+            'syn_ref':syn_col_low,
+            'nonsyn_ref':nonsyn_col_low,
+            'syn_query':anc_base_col_high,
+            'nonsyn_query':anc_base_col_high,
+            'syn_amb':syn_col,
+            'nonsyn_amb':nonsyn_col,
+            'intergenic_ref':syn_col_low,
+            'intergenic_query':anc_base_col_high,
+            'intergenic_amb':syn_col,
+            'nonsyn_ref_stop':nonsyn_col_low,
+            'nonsyn_query_stop':anc_base_col_high,
+            'no_matching_genes':nonsyn_col
+        }
+    elif highlight == 'ref':
+        colourDictQuery = {
+            'deletion_query':(184,110,188),
+            'insertion_query':(184,110,188),
+            'syn_ref':(193,130,45),
+            'nonsyn_ref':(193,130,45),
+            'syn_query':(89,147,190),
+            'nonsyn_query':(184,110,188),
+            'syn_amb':(89,147,190),
+            'nonsyn_amb':(184,110,188),
+            'intergenic_ref':(193,130,45),
+            'intergenic_query':(89,147,190),
+            'intergenic_amb':(89,147,190),
+            'nonsyn_ref_stop':(193,130,45),
+            'nonsyn_query_stop':(184,110,188),
+            'no_matching_genes':(184,110,188)
+        }
+        colourDictRef = {
+            'deletion_query':(184,110,188),
+            'insertion_query':(184,110,188),
+            'syn_ref':(89,147,190),
+            'nonsyn_ref':(184,110,188),
+            'syn_query':(193,130,45),
+            'nonsyn_que ry':(193,130,45),
+            'syn_amb':(89,147,190),
+            'nonsyn_amb':(184,110,188),
+            'intergenic_ref':(89,147,190),
+            'intergenic_query':(193,130,45),
+            'intergenic_amb':(89,147,190),
+            'nonsyn_ref_stop':(184,110,188),
+            'nonsyn_query_stop':(193,130,45),
+            'no_matching_genes':(184,110,188)
+        }
+    else:
+        colourDictQuery = {
+            'deletion_query':(184,110,188),
+            'insertion_query':(184,110,188),
+            'syn_ref':(193,130,45),
+            'nonsyn_ref':(193,130,45),
+            'syn_query':(89,147,190),
+            'nonsyn_query':(184,110,188),
+            'syn_amb':(89,147,190),
+            'nonsyn_amb ':(184,110,188),
+            'intergenic_ref':(193,130,45),
+            'intergenic_query':(89,147,190),
+            'intergenic_amb':(89,147,190),
+            'nonsyn_ref_stop':(193,130,45),
+            'nonsyn_query_stop':(184,110,188),
+            'no_matching_genes':(184,110,188)
+        }
+        colourDictRef = {
+            'deletion_query':(184,110,188),
+            'insertion_query':(184,110,188),
+            'syn_ref':(89,147,190),
+            'nonsyn_ref':(184,110,188),
+            'syn_query':(193,130,45),
+            'nonsyn_query':(193,130,45),
+            'syn_amb':(89,147,190),
+            'nonsyn_amb':(184,110,188),
+            'intergenic_ref':(89,147,190),
+            'intergenic_query':(193,130,45),
+            'intergenic_amb':(89,147,190),
+            'nonsyn_ref_stop':(184,110,188),
+            'nonsyn_query_stop':(193,130,45),
+            'no_matching_genes':(184,110,188)
+        }
+    colourDictSV = {'deletion in query':(211,78,92),
+                    'tandem expansion in query':((105,173,76), (105,173,76)),
+                    'insertion in query':(211,78,92),
+                    'tandem contraction in query':((105,173,76), (105,173,76)),
+                    'insertion in query (duplicated ends)':((211,78,92), (105,173,76)),
+                    'deletion in query (duplicated ends)':((211,78,92), (105,173,76)),
+                    'Variable region':(211,78,92),
+                    'inversion':(211,78,92)
     }
-    colourDictRef = {
-        'deletion_query':(139,115,199),
-        'insertion_query':(176,122,37),
-        'syn_ref':(211,78,62),
-        'nonsyn_ref':(90,150,50),
-        'syn_query':(36,162,139),
-        'nonsyn_query':(36,162,139),
-        'syn_amb':(211,78,62),
-        'nonsyn_amb':(90,150,50),
-        'intergenic_ref':(208,77,149),
-        'intergenic_query':(36,162,139),
-        'intergenic_amb':(208,77,149),
-        'nonsyn_ref_stop':(139,115,199),
-        'nonsyn_query_stop':(176,122,37),
-        'no_matching_genes':(176,122,37)
-    }
-    colourDictSV = {'deletion in query':(183,149,45),
-                    'tandem expansion in query':((109,138,196), (208,85,72)),
-                    'insertion in query':(183,149,45),
-                    'tandem contraction in query':((109,138,196), (208,85,72)),
-                    'insertion in query (duplicated ends)':((94,173,83), (183,149,45)),
-                    'deletion in query (duplicated ends)':((94,173,83), (183,149,45)),
-                    'Variable region':(199,99,172)
-    }
-    svg.drawOutRect(left_buffer, top_buffer, int(length1 * 1.0 / max_width * fig_width), genome_thick, alpha2=0, lt=6)
-    svg.writeString(q_name, left_buffer + fig_width + right_buffer/30, top_buffer + genome_thick*4/6, genome_thick/3)
-    svg.drawOutRect(left_buffer, top_buffer + ygap + genome_thick, int(length2 * 1.0 / max_width * fig_width), genome_thick, alpha2=0, lt=6)
-    svg.writeString(r_name, left_buffer + fig_width + right_buffer/30, top_buffer + ygap + genome_thick + genome_thick*4/6, genome_thick/3)
+    scale_bar_size = 3000000
+    scale_bar_step = 500000
+    svg.drawOutRect(left_buffer, top_buffer/2, int(scale_bar_size * 1.0 / max_width * fig_width), genome_thick, alpha2=0, lt=3)
+    for i in range(scale_bar_step, scale_bar_size, scale_bar_step):
+        svg.drawLine(left_buffer + int(i * 1.0 / max_width * fig_width), top_buffer/2, left_buffer + int(i * 1.0 / max_width * fig_width), top_buffer/2 + genome_thick, th=2)
+        svg.writeString(str(i) + ' bp', left_buffer + int(i * 1.0 / max_width * fig_width), top_buffer/2 - 5, genome_thick/4, justify='middle')
+    svg.drawOutRect(left_buffer, top_buffer, int(length2 * 1.0 / max_width * fig_width), genome_thick, alpha2=1, lt=0, fill=(200,200,200))
+    svg.writeString(r_name, left_buffer + fig_width + right_buffer/30, top_buffer + genome_thick*4/6, genome_thick)
+    svg.drawOutRect(left_buffer, top_buffer + ygap + genome_thick, int(length1 * 1.0 / max_width * fig_width), genome_thick, alpha2=1, lt=0, fill=(200,200,200))
+    svg.writeString(q_name, left_buffer + fig_width + right_buffer/30, top_buffer + ygap + genome_thick + genome_thick*4/6, genome_thick)
+    blast_overhang = 10
+    blast_hit_overhang = 10 + sv_thick /2
     with open(diff_file) as df:
         for line in df:
+#        for line in reversed(df.readlines()):
             if line.startswith('Variant'):
                 stuff1, q_name, pos1, pos2, r_name, pos3, pos4, b1, b2, anc_type, mut_type, genes1, genes2, genes3, genes4, genes5, genes6, genes7, genes8, genes9, genes10 = line.split('\t')
                 pos1, pos3 = int(pos1), int(pos3)
                 x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
                 x2 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
-                join_color = (120, 120, 120)
+                join_color = (200, 200, 200)
                 color1 = colourDictQuery[mut_type]
                 color2 = colourDictRef[mut_type]
-                svg.drawLine(x1, top_buffer + genome_thick, x2, top_buffer + genome_thick + ygap, join_thick, join_color)
-                svg.drawLine(x1, top_buffer - snp_over, x1, top_buffer + genome_thick, snp_thick, color1)
-                svg.drawLine(x2, top_buffer + genome_thick + ygap, x2, top_buffer + 2 * genome_thick + ygap + snp_over, snp_thick, color2)
+                svg.drawLine(x2, top_buffer + genome_thick, x1, top_buffer + genome_thick + ygap, join_thick, join_color)
+                svg.drawLine(x2, top_buffer, x2, top_buffer + genome_thick, snp_thick, color2)
+                svg.drawLine(x1, top_buffer + genome_thick + ygap, x1, top_buffer + 2 * genome_thick + ygap, snp_thick, color1)
             elif line.startswith('SV'):
                 stuff1, q_name, pos1, pos2, r_name, pos3, pos4, b1, b2, anc_type, the_type, genes1, genes2, genes3, genes4, genes5, genes6, genes7, genes8, genes9, genes10 = line.split('\t')
                 pos1, pos2, pos3, pos4 = map(int, (pos1, pos2, pos3, pos4))
@@ -1066,42 +1207,42 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     width = x4 - x3
                     if width < 1:
                         width = 1
-                    y1 = top_buffer + genome_thick + 3
-                    y2 = top_buffer + genome_thick + ygap - 3
-                    svg.drawBlastHit(x1, y1, x2, y1, x3 + width + sv_thick/2, y2, x3 - sv_thick/2, y2, (100, 100, 100), sv_thick, 0.4)
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
+                    svg.drawBlastHit(x1, y2, x2, y2, x3 + width + sv_thick/2, y1, x3 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
                     color = colourDictSV[the_type]
-                    svg.drawOutRect(x3, top_buffer + ygap + genome_thick, width, genome_thick, color, color, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3, top_buffer - blast_overhang, width, genome_thick + 2 * blast_overhang, color, color, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'tandem expansion in query':
                     x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
                     x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
                     x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
                     x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
-                    y1 = top_buffer + genome_thick + 3
-                    y2 = top_buffer + genome_thick + ygap - 3
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
                     width1 = x2 - x1
                     if width1 < 1:
                         width1 = 1
                     width2 = x4 - x3
                     if width2 < 1:
                         width2 = 1
-                    svg.drawBlastHit(x1 - sv_thick/2, y1, x1 + width2 + sv_thick/2, y1, x3 + width2 + sv_thick/2, y2, x3 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
-                    svg.drawBlastHit(x1 + width1 - width2 - sv_thick/2, y1, x1 + width1 + sv_thick/2, y1, x3 + width2 + sv_thick/2, y2, x3 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width2 + sv_thick/2, y2, x3 + width2 + sv_thick/2, y1, x3 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
+                    svg.drawBlastHit(x1 + width1 - width2 - sv_thick/2, y2, x1 + width1 + sv_thick/2, y2, x3 + width2 + sv_thick/2, y1, x3 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
                     color1, color2 = colourDictSV[the_type]
-                    svg.drawOutRect(x1, top_buffer, width1, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x3, top_buffer + genome_thick + ygap, width2, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x1, top_buffer + genome_thick + ygap - blast_overhang, width1, genome_thick + 2 * blast_overhang, color1, color1, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3, top_buffer - blast_overhang, width2, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'insertion in query':
                     x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
                     x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
                     x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
                     x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
-                    y1 = top_buffer + genome_thick + 3
-                    y2 = top_buffer + genome_thick + ygap - 3
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
                     width = x2 - x1
                     if width < 1:
                         width = 1
-                    svg.drawBlastHit(x1 - sv_thick/2, y1, x1 + width + sv_thick/2, y1, x4, y2, x3, y2, (100, 100, 100), 0, 0.4)
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width + sv_thick/2, y2, x4, y1, x3, y1, (0, 0, 0), 0, 0.4)
                     color = colourDictSV[the_type]
-                    svg.drawOutRect(x1, top_buffer, width, genome_thick, color, color, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x1, top_buffer + genome_thick + ygap - blast_overhang, width, genome_thick + 2 * blast_overhang, color, color, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'tandem contraction in query':
                     x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
                     x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
@@ -1113,70 +1254,87 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
                     width2 = x4 - x3
                     if width2 < 1:
                         width2 = 1
-                    y1 = top_buffer + genome_thick + 3
-                    y2 = top_buffer + genome_thick + ygap - 3
-                    svg.drawBlastHit(x1 - sv_thick/2, y1, x1 + x4 - x3 + sv_thick/2, y1, x4 + sv_thick/2, y2, x3 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
-                    svg.drawBlastHit(x2 - x4 + x3 - sv_thick/2, y1, x2 + sv_thick/2, y1, x4 + sv_thick/2, y2, x3 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width1 + sv_thick/2, y2, x3 + width2 + sv_thick/2, y1, x3 + width2 - width1 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width1 + sv_thick/2, y2, x3 + width1 + sv_thick/2, y1, x3 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
                     color1, color2 = colourDictSV[the_type]
-                    svg.drawOutRect(x1, top_buffer, x2 - x1, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x3, top_buffer + ygap + genome_thick, x4 - x3, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x1, top_buffer + ygap + genome_thick - blast_overhang, width1, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3, top_buffer - blast_overhang, width2, genome_thick + 2 * blast_overhang, color1, color1, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'insertion in query (duplicated ends)':
                     x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
                     x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
                     x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
                     x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
-                    y1 = top_buffer + genome_thick
-                    y2 = top_buffer + genome_thick + ygap
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
                     width1 = x2 - x1
                     if width1 < 1:
                         width1 = 1
                     width2 = x4 - x3
                     if width2 < 1:
                         width2 = 1
-                    svg.drawBlastHit(x1 - width2 - sv_thick/2, y1, x1 + sv_thick/2, y1, x3 + width2 + sv_thick/2, y2, x3 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
-                    svg.drawBlastHit(x1 + width1 - sv_thick/2, y1, x1 + width1 + width2 + sv_thick/2, y1, x3 + width2 + sv_thick/2, y2, x3 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
+                    svg.drawBlastHit(x1 - width2 - sv_thick/2, y2, x1 + sv_thick/2, y2, x3 + width2 + sv_thick/2, y1, x3 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
+                    svg.drawBlastHit(x1 + width1 - sv_thick/2, y2, x1 + width1 + width2 + sv_thick/2, y2, x3 + width2 + sv_thick/2, y1, x3 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
                     color1, color2 = colourDictSV[the_type]
-                    svg.drawOutRect(x1 - width2, top_buffer, width2, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x1 + width1, top_buffer, width2, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x1, top_buffer, width1, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x3, top_buffer + genome_thick + ygap, width2, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x1 - width2, top_buffer + genome_thick + ygap - blast_overhang, width2, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x1 + width1, top_buffer + genome_thick + ygap - blast_overhang, width2, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x1, top_buffer + genome_thick + ygap - blast_overhang, width1, genome_thick + 2 * blast_overhang, color1, color1, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3, top_buffer - blast_overhang, width2, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'deletion in query (duplicated ends)':
                     x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
                     x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
                     x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
                     x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
-                    y1 = top_buffer + genome_thick
-                    y2 = top_buffer + genome_thick + ygap
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
                     width1 = x2 - x1
                     if width1 < 1:
                         width1 = 1
                     width2 = x4 - x3
                     if width2 < 1:
                         width2 = 1
-                    svg.drawBlastHit(x1 - sv_thick/2, y1, x1 + width1 + sv_thick/2, y1, x3 + sv_thick/2, y2, x3 - width1 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
-                    svg.drawBlastHit(x1 - sv_thick/2, y1, x1 + width1 + sv_thick/2, y1, x3 + width2 + width1 + sv_thick/2, y2, x3 + width2 - sv_thick/2, y2, (100, 100, 100), 0, 0.4)
-                    color2, color1 = colourDictSV[the_type]
-                    svg.drawOutRect(x1, top_buffer, width1, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x3 - width1, y2, width1, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x3 + width2, y2, width1, genome_thick, color2, color2, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x3, y2, width2, genome_thick, color1, color1, sv_thick, 1, alpha2=0.6)
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width1 + sv_thick/2, y2, x3 + sv_thick/2, y1, x3 - width1 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width1 + sv_thick/2, y2, x3 + width2 + width1 + sv_thick/2, y1, x3 + width2 - sv_thick/2, y1, (0, 0, 0), 0, 0.4)
+                    color1, color2 = colourDictSV[the_type]
+                    svg.drawOutRect(x1, top_buffer + genome_thick + ygap - blast_overhang, width1, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3 - width1, top_buffer - blast_overhang, width1, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3 + width2, top_buffer - blast_overhang, width1, genome_thick + 2 * blast_overhang, color2, color2, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3, top_buffer - blast_overhang, width2, genome_thick + 2 * blast_overhang, color1, color1, sv_thick, 1, alpha2=0.6)
                 elif the_type == 'Variable region':
                     x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
                     x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
                     x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
                     x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
-                    y1 = top_buffer + genome_thick
-                    y2 = top_buffer + genome_thick + ygap
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
                     width1 = x2 - x1
                     if width1 < 1:
                         width1 = 1
                     width2 = x4 - x3
                     if width2 < 1:
                         width2 = 1
-                    svg.drawBlastHit(x1 - sv_thick/2, y1, x1 + width1 + sv_thick/2, y1, x3 + width2 +sv_thick/2, y2, x3-sv_thick/2, y2, (100, 100, 100), 0, 0.4)
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width1 + sv_thick/2, y2, x3 + width2 +sv_thick/2, y1, x3-sv_thick/2, y1, (0, 0, 0), 0, 0.4)
                     color = colourDictSV[the_type]
-                    svg.drawOutRect(x1, top_buffer, width1, genome_thick, color, color, sv_thick, 1, alpha2=0.6)
-                    svg.drawOutRect(x3, y2, width2, genome_thick, color, color, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x1, top_buffer + genome_thick + ygap - blast_overhang, width1, genome_thick + 2 * blast_overhang, color, color, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3, top_buffer - blast_overhang, width2, genome_thick + 2 * blast_overhang, color, color, sv_thick, 1, alpha2=0.6)
+                elif the_type == 'inversion':
+                    x1 = int(pos1 * 1.0 / max_width * fig_width) + left_buffer
+                    x2 = int(pos2 * 1.0 / max_width * fig_width) + left_buffer
+                    x3 = int(pos3 * 1.0 / max_width * fig_width) + left_buffer
+                    x4 = int(pos4 * 1.0 / max_width * fig_width) + left_buffer
+                    y1 = top_buffer + genome_thick + blast_hit_overhang
+                    y2 = top_buffer + genome_thick + ygap - blast_hit_overhang
+                    width1 = x2 - x1
+                    if width1 < 1:
+                        width1 = 1
+                    width2 = x4 - x3
+                    if width2 < 1:
+                        width2 = 1
+                    svg.drawBlastHit(x1 - sv_thick/2, y2, x1 + width1 + sv_thick/2, y2, x3-sv_thick/2, y1, x3 + width2 +sv_thick/2, y1, (0, 0, 0), 0, 0.4)
+                    color = colourDictSV[the_type]
+                    svg.drawOutRect(x1, top_buffer + genome_thick + ygap - blast_overhang, width1, genome_thick + 2 * blast_overhang, color, color, sv_thick, 1, alpha2=0.6)
+                    svg.drawOutRect(x3, top_buffer - blast_overhang, width2, genome_thick + 2 * blast_overhang, color, color, sv_thick, 1, alpha2=0.6)
                 else:
                     print line.rstrip()
     svg.writesvg(out_file + '.svg')
