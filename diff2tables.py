@@ -481,7 +481,7 @@ def get_adjacent_genes(gene, gen_folder, i):
 
 
 
-def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enrich=False, only_snvs=True):
+def get_genes(folder, gen_folder, out_label, rast_annot, rast_sub, intense_file, gene_list_file=None, only_bio_process=False, do_go_enrich=False, only_snvs=True):
     out_dict = {}
     refs = []
     min_length = 0.90
@@ -492,27 +492,98 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
     sorted_files.sort()
     homolog = {}
     count_dict = {}
+    count_gene_dict = {}
     count_var_set = set()
     reference_set = set()
     sv_groups = []
     plasmid_groups = []
+    fig2locus = {}
+    with open(rast_annot) as f:
+        f.readline()
+        for line in f:
+            feature, the_type, contig, start, stop, frame, strand, lenght, function, subsystem, ncbi_gi, locus = line.split('\t')
+            if the_type == 'CDS':
+                locus = locus.split('|')[1].rstrip()
+                fig2locus[feature] = (contig, locus)
+    locus_go = {}
+    with open(rast_sub) as f:
+        f.readline()
+        for line in f:
+            cat, subcat, subsystem, role, features = line.rstrip().split('\t')
+            features = set(features.split())
+            for i in features:
+                if i[-1] == ',':
+                    fig = i[:-1]
+                else:
+                    fig = i
+                if not '.rna.' in fig and fig2locus[fig] in locus_go:
+                    locus_go[fig2locus[fig]].add(cat)
+                elif not '.rna.' in fig:
+                    locus_go[fig2locus[fig]] = set([cat])
+    change_intense = {}
+    the_intense = {}
+    with open(intense_file) as f:
+        for line in f:
+            diff, locus, que, pos, pos2, b1, b2, change = line.split()
+            change = float(change)
+            if que == 'que' and diff in change_intense and locus in change_intense[diff] and change > change_intense[diff][locus]:
+                change_intense[diff][locus] = change
+            elif que == 'que' and  diff in change_intense and not locus in change_intense[diff]:
+                change_intense[diff][locus] = change
+            elif que == 'que' and  not diff in change_intense:
+                change_intense[diff] = {locus:change}
     for diffs in sorted_files:
         if diffs.endswith('N_diff'):
             with open(folder + '/' + diffs) as diff_file:
                 diff_file.readline()
                 for line in diff_file:
-
                     gene_group = []
                     type, q_name, pos1, pos2, r_name, pos3, pos4, b1, b2, anc_type, mut_type, genes1, genes2, genes3, genes4, genes5, genes6, genes7, genes8, genes9, genes10 = line.split('\t')
                     reference_set.add(r_name)
-                    count_var_set.add(mut_type)
-                    if q_name in count_dict:
-                        if mut_type in count_dict[q_name]:
-                            count_dict[q_name][mut_type] += 1
+                    new_mut_type = None
+                    if type == 'Variant':
+                        genes = genes1.split(';')
+                        genes = filter(lambda a: a != 'none', genes)
+                        for i in genes:
+                            prokka = i.split(',')[1]
+                            if q_name in count_gene_dict:
+                                if mut_type in count_gene_dict[q_name]:
+                                    count_gene_dict[q_name][mut_type].add(prokka)
+                                else:
+                                    count_gene_dict[q_name][mut_type] = set([prokka])
+                            else:
+                                count_gene_dict[q_name] = {mut_type:set([prokka])}
+                        if b1 == '.' or b2 == '.':
+                            if mut_type == 'intergenic_amb':
+                                # new_mut_type = 'intergenic_indel'
+                                if b1 == '.':
+                                    new_mut_type = 'intergenic_deletion'
+                                elif b2 == '.':
+                                    new_mut_type = 'intergenic_insertion'
+                                else:
+                                    new_mut_type = 'intergenic_indel'
+                                    print 'ding'
+                            else:
+                                new_mut_type = mut_type
+                        elif len(b1) != len(b2):
+                           print 'dong'
+                        elif len(b1) > 1:
+                            print 'dang'
                         else:
-                            count_dict[q_name][mut_type] = 1
+                            new_mut_type = mut_type
                     else:
-                        count_dict[q_name] = {mut_type:1}
+                        new_mut_type = mut_type
+                    count_var_set.add(new_mut_type)
+                    if new_mut_type is None:
+                        print 'flurk'
+                        sys.exit()
+                    if q_name in count_dict:
+                        if new_mut_type in count_dict[q_name]:
+                            count_dict[q_name][new_mut_type] += 1
+                        else:
+                            count_dict[q_name][new_mut_type] = 1
+                    else:
+                        count_dict[q_name] = {new_mut_type:1}
                     if not q_name in out_dict:
                         out_dict[q_name] = {}
                     if mut_type == 'nonsyn_query':
@@ -528,7 +599,13 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
                                     homolog[gene_name].append(q_name + '.' + i.split(',')[1])
                             gene_group.append(gene_name)
                             out_dict = add_to_dict(q_name, gene_name, mut_type, out_dict)
-                    elif mut_type == 'nonsyn_query_stop':
+                            locus = i.split(',')[1]
+                            if diffs in change_intense and locus in change_intense[diffs]:
+                                if gene_name in the_intense and abs(change_intense[diffs][locus]) > abs(the_intense[gene_name]):
+                                    the_intense[gene_name] = change_intense[diffs][locus]
+                                elif not gene_name in the_intense:
+                                    the_intense[gene_name] = change_intense[diffs][locus]
+                    elif mut_type == 'nonsyn_query_stop_gain':
                         genes = genes1.split(';')
                         genes = filter(lambda a: a != 'none', genes)
                         for i in genes:
@@ -609,7 +686,21 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
                                 gene_name, ref_list = get_loci_group(i.split(',')[1], gen_folder, q_name, ref_list, homolog)
                             gene_group.append(gene_name)
                             out_dict = add_to_dict(q_name, gene_name, mut_type, out_dict)
-                    elif mut_type == 'nonsyn_ref_stop':
+                            if diffs in change_intense and locus in change_intense[diffs]:
+                                if gene_name in the_intense and abs(change_intense[diffs][locus]) > abs(the_intense[gene_name]):
+                                    the_intense[gene_name] = change_intense[diffs][locus]
+                                elif not gene_name in the_intense:
+                                    the_intense[gene_name] = change_intense[diffs][locus]
+                    elif mut_type == 'nonsyn_ref_stop_gain':
+                        genes = genes1.split(';')
+                        genes = filter(lambda a: a != 'none', genes)
+                        for i in genes:
+                            gene_name = i.split(',')[0].split('_')[0]
+                            if gene_name == 'none':
+                                gene_name, ref_list = get_loci_group(i.split(',')[1], gen_folder, q_name, ref_list, homolog)
+                            gene_group.append(gene_name)
+                            out_dict = add_to_dict(q_name, gene_name, mut_type, out_dict)
+                    elif mut_type == 'nonsyn_ref_stop_loss':
                         genes = genes1.split(';')
                         genes = filter(lambda a: a != 'none', genes)
                         for i in genes:
@@ -938,6 +1029,7 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
         description_dict[j[0]] = (j[3], j[2])
     query.close()
     get_seq = False
+    gene_go = {}
     for i in out_dict:
         with open(gen_folder + '/' + i + '.gbk') as gbk:
             ref = open('tempref.fa', 'w')
@@ -948,12 +1040,18 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
                     description = 'Hypothetical protein'
                     inference = 'none'
                     get_seq = False
+                elif line.startswith('LOCUS '):
+                    contig = line.split()[1]
                 elif line.startswith('                     /gene="'):
                     gene_name = line.split('"')[1].split('_')[0]
                     if gene_name in gene_list and not gene_name in out_dict[i]:
                         out_dict = add_to_dict(i, gene_name, 'present', out_dict)
                 elif line.startswith('                     /locus_tag="'):
                     locus = line.split('"')[1]
+                    the_name = i + '.' + locus
+                    if the_name in gene_list:
+                        if (contig, locus) in locus_go:
+                            gene_go[the_name] = locus_go[(contig, locus)]
                 elif line.startswith('                     /inference="similar to AA sequence'):
                     inference = line.split('"')[1].split(':')[-1]
                 elif line.startswith('                     /inference="protein motif:Pfam:'):
@@ -965,6 +1063,9 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
                     ref.write('>' + locus + '\n' + the_seq + '\n')
                     length_dict2[locus] = len(the_seq)
                     if not gene_name is None:
+                        if gene_name in gene_list:
+                            if (contig, locus) in locus_go:
+                                gene_go[gene_name] = locus_go[(contig, locus)]
                         description_dict[gene_name] = (description, inference)
                 elif line.startswith('                     /translation="'):
                     the_seq = line.split()[0]
@@ -977,6 +1078,9 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
                         ref.write('>' + locus + '\n' + the_seq + '\n')
                         length_dict2[locus] = len(the_seq)
                         if not gene_name is None:
+                            if gene_name in gene_list:
+                                if (contig, locus) in locus_go:
+                                    gene_go[gene_name] = locus_go[(contig, locus)]
                             description_dict[gene_name] = (description, inference)
             ref.close()
         subprocess.Popen('makeblastdb -dbtype prot -in tempref.fa -out tempdb', shell=True, stdout=subprocess.PIPE).wait()
@@ -1010,109 +1114,109 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
                         description_dict[gene_name] = (description, inference)
     gene_list = list(gene_list)
     go_descriptions = {}
-    gene_go = {}
+    # gene_go = {}
     fam_acc = {}
-    if not os.path.exists('this_is_a_go_file'):
-        online_mode = True
-        out_go = open('this_is_a_go_file', 'w')
-    else:
-        online_mode = False
-        tiagd = {}
-        with open('this_is_a_go_file') as tiagf:
-            for line in tiagf:
-                if line.split('\t')[0] in tiagd:
-                    tiagd[line.split('\t')[0]].append(line.rstrip().split('\t')[1:])
-                else:
-                    tiagd[line.split('\t')[0]] = [line.rstrip().split('\t')[1:]]
-    print 'using online mode', online_mode
-    go_rel_dict = {}
-    with open('go.obo') as goobo:
-        for line in goobo:
-            if line.startswith('id: '):
-                go = line.rstrip()[4:]
-                go_rel_dict[go] = []
-            elif line.startswith('is_a: '):
-                go_rel_dict[go].append(line.split()[1])
-            elif line.startswith('relationship: part_of'):
-                go_rel_dict[go].append(line.split()[2])
-            elif line.startswith('name: '):
-                go_descriptions[go] = line.rstrip()[6:]
-    for i in description_dict:
-        if description_dict[i][1].startswith('PF'):
-            if description_dict[i][1] in fam_acc:
-                fam_acc[description_dict[i][1]].append(i)
-            else:
-                fam_acc[description_dict[i][1]] = [i]
-        elif description_dict[i][1] != 'none':
-            if online_mode:
-                req = urllib2.urlopen('http://www.ebi.ac.uk/QuickGO/GAnnotation?protein=' + description_dict[i][1] + '&format=tsv')
-                print 'http://www.ebi.ac.uk/QuickGO/GAnnotation?protein=' + description_dict[i][1] + '&format=tsv'
-                req.readline()
-                for line in req:
-                    go, desc = line.split('\t')[6:8]
-                    out_go.write(description_dict[i][1] + '\t' + go + '\t' + desc + '\n')
-                    if i in gene_go:
-                        gene_go[i].add(go)
-                    else:
-                        gene_go[i] = set([go])
-                    go_descriptions[go] = desc
-                if not i in gene_go:
-
-                    print i, 'http://www.uniprot.org/uniprot/' + description_dict[i][1] + '.rdf'
-                    req = urllib2.urlopen('http://www.uniprot.org/uniprot/' + description_dict[i][1] + '.rdf')
-                    new_accs = []
-                    for line in req:
-                        if line.startswith('<replacedBy rdf:resource='):
-                            new_accs.append(line.split('"')[1].split('/')[-1])
-                    print new_accs
-                    if new_accs != []:
-                        new_acc = new_accs[-1]
-                        req = urllib2.urlopen('http://www.ebi.ac.uk/QuickGO/GAnnotation?protein=' + new_acc + '&format=tsv')
-                        req.readline()
-                        for line in req:
-                            go, desc = line.split('\t')[6:8]
-                            out_go.write(description_dict[i][1] + '\t' + go + '\t' + desc + '\n')
-                            if i in gene_go:
-                                gene_go[i].add(go)
-                            else:
-                                gene_go[i] = set([go])
-                            go_descriptions[go] = desc
-            else:
-                if description_dict[i][1] in tiagd:
-                    for j in tiagd[description_dict[i][1]]:
-                        go, desc = j
-                        if i in gene_go:
-                            gene_go[i].add(go)
-                        else:
-                            gene_go[i] = set([go])
-                        go_descriptions[go] = desc
-    req = urllib2.urlopen('http://geneontology.org/external2go/pfam2go')
-    for line in req:
-        if not line.startswith('!'):
-            if line.split()[0].split(':')[1] in fam_acc:
-                genes = fam_acc[line.split()[0].split(':')[1]]
-                go = line.split()[-1]
-                desc = line.split(':')[2][:-5]
-                go_descriptions[go] = desc
-                for gene in genes:
-                    if gene in gene_go:
-                        gene_go[gene].add(go)
-                    else:
-                        gene_go[gene] = set([go])
-    for i in gene_go:
-        new_set = gene_go[i]
-        old_set = set()
-        while len(new_set) != len(old_set):
-            old_set = new_set
-            new_set = set()
-            for j in old_set:
-                new_set.add(j)
-                try:
-                    for k in go_rel_dict[j]:
-                        new_set.add(k)
-                except KeyError:
-                    pass
-        gene_go[i] = new_set
+    # if not os.path.exists('this_is_a_go_file'):
+    #     online_mode = True
+    #     out_go = open('this_is_a_go_file', 'w')
+    # else:
+    #     online_mode = False
+    #     tiagd = {}
+    #     with open('this_is_a_go_file') as tiagf:
+    #         for line in tiagf:
+    #             if line.split('\t')[0] in tiagd:
+    #                 tiagd[line.split('\t')[0]].append(line.rstrip().split('\t')[1:])
+    #             else:
+    #                 tiagd[line.split('\t')[0]] = [line.rstrip().split('\t')[1:]]
+    # print 'using online mode', online_mode
+    # go_rel_dict = {}
+    # with open('go.obo') as goobo:
+    #     for line in goobo:
+    #         if line.startswith('id: '):
+    #             go = line.rstrip()[4:]
+    #             go_rel_dict[go] = []
+    #         elif line.startswith('is_a: '):
+    #             go_rel_dict[go].append(line.split()[1])
+    #         elif line.startswith('relationship: part_of'):
+    #             go_rel_dict[go].append(line.split()[2])
+    #         elif line.startswith('name: '):
+    #             go_descriptions[go] = line.rstrip()[6:]
+    # for i in description_dict:
+    #     if description_dict[i][1].startswith('PF'):
+    #         if description_dict[i][1] in fam_acc:
+    #             fam_acc[description_dict[i][1]].append(i)
+    #         else:
+    #             fam_acc[description_dict[i][1]] = [i]
+    #     elif description_dict[i][1] != 'none':
+    #         if online_mode:
+    #             req = urllib2.urlopen('http://www.ebi.ac.uk/QuickGO/GAnnotation?protein=' + description_dict[i][1] + '&format=tsv')
+    #             print 'http://www.ebi.ac.uk/QuickGO/GAnnotation?protein=' + description_dict[i][1] + '&format=tsv'
+    #             req.readline()
+    #             for line in req:
+    #                 go, desc = line.split('\t')[6:8]
+    #                 out_go.write(description_dict[i][1] + '\t' + go + '\t' + desc + '\n')
+    #                 if i in gene_go:
+    #                     gene_go[i].add(go)
+    #                 else:
+    #                     gene_go[i] = set([go])
+    #                 go_descriptions[go] = desc
+    #             if not i in gene_go:
+    #
+    #                 print i, 'http://www.uniprot.org/uniprot/' + description_dict[i][1] + '.rdf'
+    #                 req = urllib2.urlopen('http://www.uniprot.org/uniprot/' + description_dict[i][1] + '.rdf')
+    #                 new_accs = []
+    #                 for line in req:
+    #                     if line.startswith('<replacedBy rdf:resource='):
+    #                         new_accs.append(line.split('"')[1].split('/')[-1])
+    #                 print new_accs
+    #                 if new_accs != []:
+    #                     new_acc = new_accs[-1]
+    #                     req = urllib2.urlopen('http://www.ebi.ac.uk/QuickGO/GAnnotation?protein=' + new_acc + '&format=tsv')
+    #                     req.readline()
+    #                     for line in req:
+    #                         go, desc = line.split('\t')[6:8]
+    #                         out_go.write(description_dict[i][1] + '\t' + go + '\t' + desc + '\n')
+    #                         if i in gene_go:
+    #                             gene_go[i].add(go)
+    #                         else:
+    #                             gene_go[i] = set([go])
+    #                         go_descriptions[go] = desc
+    #         else:
+    #             if description_dict[i][1] in tiagd:
+    #                 for j in tiagd[description_dict[i][1]]:
+    #                     go, desc = j
+    #                     if i in gene_go:
+    #                         gene_go[i].add(go)
+    #                     else:
+    #                         gene_go[i] = set([go])
+    #                     go_descriptions[go] = desc
+    # req = urllib2.urlopen('http://geneontology.org/external2go/pfam2go')
+    # for line in req:
+    #     if not line.startswith('!'):
+    #         if line.split()[0].split(':')[1] in fam_acc:
+    #             genes = fam_acc[line.split()[0].split(':')[1]]
+    #             go = line.split()[-1]
+    #             desc = line.split(':')[2][:-5]
+    #             go_descriptions[go] = desc
+    #             for gene in genes:
+    #                 if gene in gene_go:
+    #                     gene_go[gene].add(go)
+    #                 else:
+    #                     gene_go[gene] = set([go])
+    # for i in gene_go:
+    #     new_set = gene_go[i]
+    #     old_set = set()
+    #     while len(new_set) != len(old_set):
+    #         old_set = new_set
+    #         new_set = set()
+    #         for j in old_set:
+    #             new_set.add(j)
+    #             try:
+    #                 for k in go_rel_dict[j]:
+    #                     new_set.add(k)
+    #             except KeyError:
+    #                 pass
+    #     gene_go[i] = new_set
     go_list = set()
     new_gene_list = []
     phage_set = set()
@@ -1127,9 +1231,9 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
             for j in out_dict:
                 if i in out_dict[j]:
                     for k in out_dict[j][i].split(','):
-                        if not k.startswith('syn') and k != 'nonsyn_ref' and k != 'nonsyn_ref_stop' and k != 'present' and not only_snvs:
+                        if not k.startswith('syn') and k != 'nonsyn_ref' and k != 'nonsyn_ref_stop_loss' and k != 'nonsyn_ref_stop_gain' and k != 'present' and not only_snvs:
                             getit = True
-                        elif (k == 'nonsyn_query' or k == 'nonsyn_query_stop' \
+                        elif (k == 'nonsyn_ref' or k == 'nonsyn_ref_stop_gain' or k == 'nonsyn_ref_stop_loss' \
                                 or k == 'inframe_del_query' or k == 'deletion_query' or k == 'inframe_ins_query' \
                                 or k == 'insertion_query' or k == 'nonsyn_amb') and only_snvs:
                             getit = True
@@ -1185,72 +1289,72 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
     new_go_list = []
     go_freq = {}
     go_gene_dict = {}
-    for i in go_list: # create a list of genes in go category
-        gene_set = set()
-        for j in gene_list:
-            if j in gene_go and i in gene_go[j]:
-                gene_set.add(j)
-        go_gene_dict[i] = gene_set
-    go_groups = []
-    # for each group of genes - get the lowest go heirachy for that group
-    for i in go_gene_dict:
-        gotit = False
-        for j in go_groups:
-            if j[1] == go_gene_dict[i]:
-                j[0].append(i)
-                gotit = True
-                break
-        if not gotit:
-            go_groups.append([[i], go_gene_dict[i]])
-    go_list = []
-    for i in go_groups:
-        parents = set()
-        for j in i[0]:
-            for k in go_rel_dict[j]:
-                parents.add(k)
-        for j in i[0]:
-            if not j in parents:
-                print j
-                go_list.append(j)
-    desc_set = set()
-    for i in go_list:
-        count = 0
-        for j in gene_list:
-            if j in gene_go and i in gene_go[j]:
-                count += 1
-        go_freq[i] = count
-        if count > 5 and go_descriptions[i] not in desc_set:# and count < len(gene_list) * 0.2:
-            new_go_list.append(i)
-            go_freq[i] = count
-            desc_set.add(go_descriptions[i])
-    go_list = new_go_list
-    if only_bio_process:
-        new_go_list = []
-        for i in go_descriptions: # find the biological process go term
-            if go_descriptions[i] == 'biological_process':
-                parent_go = i
-        for i in go_list: # for each go term
-            new_set = set([i])
-            old_set = set()
-            while len(new_set) != len(old_set): # trace back through go heirachy to see if it is a biological process
-                old_set = new_set
-                new_set = set()
-                for j in old_set:
-                    new_set.add(j)
-                    try:
-                        for k in go_rel_dict[j]:
-                            new_set.add(k)
-                    except KeyError:
-                        pass
-            if parent_go in new_set: # and then append it to list of new go terms
-                new_go_list.append(i)
-        print len(go_list)
-        go_list = new_go_list
-    print len(go_list)
-    for i in gene_go: # if go term has been filtered check the other box
-        for j in list(gene_go[i]):
-            if not j in go_list:
-                gene_go[i].add('other')
+    # for i in go_list: # create a list of genes in go category
+    #     gene_set = set()
+    #     for j in gene_list:
+    #         if j in gene_go and i in gene_go[j]:
+    #             gene_set.add(j)
+    #     go_gene_dict[i] = gene_set
+    # go_groups = []
+    # # for each group of genes - get the lowest go heirachy for that group
+    # for i in go_gene_dict:
+    #     gotit = False
+    #     for j in go_groups:
+    #         if j[1] == go_gene_dict[i]:
+    #             j[0].append(i)
+    #             gotit = True
+    #             break
+    #     if not gotit:
+    #         go_groups.append([[i], go_gene_dict[i]])
+    # go_list = []
+    # for i in go_groups:
+    #     parents = set()
+    #     for j in i[0]:
+    #         for k in go_rel_dict[j]:
+    #             parents.add(k)
+    #     for j in i[0]:
+    #         if not j in parents:
+    #             print j
+    #             go_list.append(j)
+    # desc_set = set()
+    # for i in go_list:
+    #     count = 0
+    #     for j in gene_list:
+    #         if j in gene_go and i in gene_go[j]:
+    #             count += 1
+    #     go_freq[i] = count
+    #     if count > 5 and go_descriptions[i] not in desc_set:# and count < len(gene_list) * 0.2:
+    #         new_go_list.append(i)
+    #         go_freq[i] = count
+    #         desc_set.add(go_descriptions[i])
+    # go_list = new_go_list
+    # if only_bio_process:
+    #     new_go_list = []
+    #     for i in go_descriptions: # find the biological process go term
+    #         if go_descriptions[i] == 'biological_process':
+    #             parent_go = i
+    #     for i in go_list: # for each go term
+    #         new_set = set([i])
+    #         old_set = set()
+    #         while len(new_set) != len(old_set): # trace back through go heirachy to see if it is a biological process
+    #             old_set = new_set
+    #             new_set = set()
+    #             for j in old_set:
+    #                 new_set.add(j)
+    #                 try:
+    #                     for k in go_rel_dict[j]:
+    #                         new_set.add(k)
+    #                 except KeyError:
+    #                     pass
+    #         if parent_go in new_set: # and then append it to list of new go terms
+    #             new_go_list.append(i)
+    #     print len(go_list)
+    #     go_list = new_go_list
+    # print len(go_list)
+    # for i in gene_go: # if go term has been filtered check the other box
+    #     for j in list(gene_go[i]):
+    #         if not j in go_list:
+    #             gene_go[i].add('other')
     the_array = numpy.zeros((len(gene_list), len(go_list)))
     for num1, i in enumerate(gene_list): # create array of go categories to box to cluster GO categories
         for num2, j in enumerate(go_list):
@@ -1305,7 +1409,26 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
             line_col = (0, 0, 200)
         else:
             line_col = (200, 0, 0)
-    if only_snvs:
+    if not gene_list_file is None:
+        with open(gene_list_file) as f:
+            gene_list = []
+            for line in f:
+                name = line.rstrip()
+                if name.startswith('P_'):
+                    name = 'PROKKA_' + name[2:]
+                if name in snv_gene_list:
+                    gene_list.append(name)
+                else:
+                    gotit = False
+                    for i in snv_gene_list + sv_gene_list + plas_gene_list:
+                        if name in i:
+                            if gotit:
+                                print 'wan wan wan'
+                            gene_list.append(i)
+                            gotit = True
+                    if not gotit:
+                        print name, 'wun wun'
+    elif only_snvs:
         gene_list = snv_gene_list
     else:
         gene_list = snv_gene_list + sv_gene_list + plas_gene_list
@@ -1313,16 +1436,9 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
     for i in cluster.dendrogram_col.reordered_ind:
         new_go_list.append(go_list[i])
     go_list = new_go_list
-    go_list.append('other')
-    go_descriptions['other'] = 'n/a'
-    for num, i in enumerate(gene_list):
+    # go_list.append('other')
+    # go_descriptions['other'] = 'n/a'
 
-        svg.writeString(i, grid_start - 10, top_buffer + num * square_height + 0.75 * square_height, 10, justify='right')
-        svg.writeString(description_dict[i][0], grid_start + (len(out_dict) + len(go_list)) * square_width + 20, top_buffer + num * square_height + 0.75 * square_height, 10)
-        if not description_dict[i][1].startswith('PF'):
-            test_out.write(description_dict[i][1] + '\n')
-    svg.writeString('Phage genes:', grid_start - 10, top_buffer + (len(gene_list))* square_height + 0.75 * square_height, 10, justify='right')
-    svg.writeString('Hypothetical proteins:', grid_start - 10, top_buffer + (len(gene_list) + 1) * square_height + 0.75 * square_height, 10, justify='right')
 
 
     ref_color = {
@@ -1351,14 +1467,14 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
         'inframe_ins_query':(95,131,220),
 
 
-        'nonsyn_query_stop':(199,164,49),
+        'nonsyn_query_stop_gain':(199,164,49),
         'partial_del':(227,133,51),
         'partial_ins':(156,186,58),
 
         'syn_ref':(200,200,200),
         'syn_query':(200,200,200),
         'nonsyn_ref':(255, 255, 255),
-        'nonsyn_ref_stop':(255, 255, 255),
+        'nonsyn_ref_stop_loss':(255, 255, 255),
 
 
         'deletion_query':(104,128,0),
@@ -1390,14 +1506,14 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 7) * square_height, 9, 9, lt=0, fill=var_color['full_ins'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 8) * square_height, 9, 9, lt=0, fill=var_color['nonsyn_query'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 9) * square_height, 9, 9, lt=0, fill=var_color['nonsyn_amb'])
-    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 10) * square_height, 9, 9, lt=0, fill=var_color['nonsyn_query_stop'])
+    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 10) * square_height, 9, 9, lt=0, fill=var_color['nonsyn_query_stop_gain'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 11) * square_height, 9, 9, lt=0, fill=var_color['inframe_del_query'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 12) * square_height, 9, 9, lt=0, fill=var_color['deletion_query'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 13) * square_height, 9, 9, lt=0, fill=var_color['partial_del'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 14) * square_height, 9, 9, lt=0, fill=var_color['partial_ins'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 15) * square_height, 9, 9, lt=0, fill=var_color['mult'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 16) * square_height, 9, 9, lt=0, fill=var_color['syn_ref'])
-    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 17) * square_height, 9, 9, lt=1, fill=var_color['nonsyn_ref_stop'])
+    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 17) * square_height, 9, 9, lt=1, fill=var_color['nonsyn_ref_stop_loss'])
 
     svg.writeString('Gene altered in pt035', grid_start - 10, top_buffer + (len(gene_list) + 24) * square_height + 0.75 * square_height, 10, justify='right')
     svg.writeString('Gene altered in pt045', grid_start - 10, top_buffer + (len(gene_list) + 25) * square_height + 0.75 * square_height, 10, justify='right')
@@ -1424,32 +1540,79 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 33) * square_height, 9, 9, lt=0, fill=ref_color['MRSA_pt135_B_165_ilm_reorient_chromosome'])
     svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 34) * square_height, 9, 9, lt=0, fill=(0, 0, 100))
 
+
     out_list = list(out_dict)
     out_list.sort()
     new_out_list = []
-    for i in ['pt035', 'pt045', 'pt108', 'pt152', 'pt158', 'pt053', 'pt060', 'pt073', 'pt117', 'pt135']:
+    for i in ['pt053', 'pt060', 'pt073', 'pt117', 'pt135', 'pt035', 'pt045', 'pt108', 'pt152', 'pt158']:
         for j in out_list:
             if i in j:
                 new_out_list.append(j)
     out_list = new_out_list
+    mod_types = set()
     for num, i in enumerate(out_list):
         phage_count = 0
         hypo_count = 0
         for j in out_dict[i]:
-            if j in phage_set and out_dict[i][j] != 'present' and j in gene_list:
+            mod_types.add(out_dict[i][j])
+            right_mut = False
+            for q in ['nonsyn_query', 'nonsyn_amb', 'nonsyn_query_stop_gain', 'deletion_query', 'insertion_query', 'inframe_del_query', 'inframe_ins_query', 'mult']:
+                if q in out_dict[i][j]:
+                    right_mut = True
+            if j in phage_set and right_mut:
                 phage_count += 1
-            if j in hypo_set and out_dict[i][j] != 'present' and j in gene_list:
+            if j in hypo_set and right_mut:
                 hypo_count += 1
         svg.writeString(str(phage_count), grid_start + num * square_width + square_width/2, top_buffer + (len(gene_list)) * square_height + 0.75 * square_height, 6, justify='middle')
         svg.writeString(str(hypo_count), grid_start + num * square_width + square_width/2, top_buffer + (len(gene_list) + 1) * square_height + 0.75 * square_height, 6, justify='middle')
     ref_go = {}
+    print '\n'.join(mod_types)
 
     adj_set = set()
+    new_gene_list = [[] for i in range(len(out_list) + 2)]
+    last_ref = None
+    # for i in gene_list:
+    #     ref = None
+    #     for num, j in enumerate(out_list):
+    #         if 'pt053' in j:
+    #             last_ref = num + 1
+    #         if i in out_dict[j] and not out_dict[j][i] is 'present':
+    #             if ref is None:
+    #                 ref = num + 1
+    #             else:
+    #                 ref = 0
+    #     if ref == last_ref:
+    #         ref = -1
+    #     if i in the_intense:
+    #         if the_intense[i] > 2.5:
+    #             new_gene_list[ref].append((0 - the_intense[i] - 200, i))
+    #         else:
+    #             new_gene_list[ref].append((the_intense[i], i))
+    #     else:
+    #         new_gene_list[ref].append((100, i))
+    # gene_list = []
+    # for i in new_gene_list:
+    #     i.sort()
+    #     for j in i:
+    #         gene_list.append(j[1])
+
+
+    for num, i in enumerate(gene_list):
+
+        svg.writeString(i, grid_start - 10, top_buffer + num * square_height + 0.75 * square_height, 10, justify='right')
+        svg.writeString(description_dict[i][0], grid_start + (len(out_dict) + len(go_list)) * square_width + 50, top_buffer + num * square_height + 0.75 * square_height, 10)
+        if not description_dict[i][1].startswith('PF'):
+            test_out.write(description_dict[i][1] + '\n')
+    svg.writeString('Phage genes:', grid_start - 10, top_buffer + (len(gene_list))* square_height + 0.75 * square_height, 10, justify='right')
+    svg.writeString('Hypothetical proteins:', grid_start - 10, top_buffer + (len(gene_list) + 1) * square_height + 0.75 * square_height, 10, justify='right')
+
     for num1, i in enumerate(out_list):
         ref_go[i] = set()
         svg.writeString(i, grid_start + num1 * square_width, top_buffer-10, 10, justify='right', rotate=-1)
         for num2, j in enumerate(gene_list):
             if j in out_dict[i]:
+                if j == 'ywqD':
+                    print out_dict[i][j]
                 adj_genes = get_adjacent_genes(j, gen_folder, i)
                 if adj_genes == []:
                     pass
@@ -1468,8 +1631,6 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
             else:
                 color = (0, 0, 0)
             svg.drawOutRect(grid_start + num1 * square_width, top_buffer + num2 * square_height, square_width -1, square_height -1, fill=color, lt=0)
-    for i in adj_set:
-        print i
     table1 = open(out_label + '.table1.tsv', 'w')
     table1.write('gene\tinference\thomologs\tgene ontology')
     for j in out_list:
@@ -1500,6 +1661,8 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
     for i in go_enrich:
         blurk.write(i + '\t' + str(go_enrich[i]) + '\n')
     table3 = open(out_label + 'table3.tsv', 'w')
+    count_var_set = list(count_var_set)
+    count_var_set.sort()
     for i in count_var_set:
         table3.write('\t' + i)
     for i in count_dict:
@@ -1509,10 +1672,20 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
                 table3.write('\t' + str(count_dict[i][j]))
             else:
                 table3.write('\t0')
+    table3 = open(out_label + 'table4.tsv', 'w')
+    for i in count_var_set:
+        table3.write('\t' + i)
+    for i in count_gene_dict:
+        table3.write('\n' + i)
+        for j in count_var_set:
+            if j in count_gene_dict[i]:
+                table3.write('\t' + str(len(count_gene_dict[i][j])))
+            else:
+                table3.write('\t0')
     go_freq['other'] = 'n/a'
     for num, i in enumerate(go_list):
         svg.writeString(i, grid_start + len(out_dict) * square_width + 10 + num * square_width, top_buffer-10, 10, justify='right', rotate=-1)
-        svg.writeString(str(go_freq[i]) + ': ' +go_descriptions[i], grid_start + len(out_dict) * square_width + 10 + num * square_width, len(gene_list) * square_height + 10 + top_buffer, 10, rotate=-1)
+        # svg.writeString(str(go_freq[i]) + ': ' +go_descriptions[i], grid_start + len(out_dict) * square_width + 10 + num * square_width, len(gene_list) * square_height + 10 + top_buffer, 10, rotate=-1)
     for num1, i in enumerate(gene_list):
         for j in adj_genes:
             if j in gene_list:
@@ -1535,21 +1708,39 @@ def get_genes(folder, gen_folder, out_label, only_bio_process=False, do_go_enric
             else:
                 color = (220, 220, 220)
             svg.drawOutRect(grid_start + len(out_dict) * square_width + 10 + num2 * square_width, top_buffer + num1 * square_height, square_width -1, square_height -1, fill=color, lt=0)
-    # for num1, i in enumerate(out_list):
-    #     for num2, j in enumerate(go_list):
-    #         if j in ref_go[i]:
-    #             color = (0, 0, 200)
-    #         else:
-    #             color = (200, 0, 0)
-    #         svg.drawOutRect(grid_start + num1 * square_width, top_buffer + len(gene_list) * square_height + 20 + num2 * square_height, square_width -1, square_height -1, fill=color, lt=0)
 
+
+    for num, i in enumerate(gene_list):
+        if i in the_intense:
+            if the_intense[i] >= 2.5:
+                color = (122, 164, 87)
+            elif the_intense[i] <= -5.0:
+                color = (203,103,81)
+            elif the_intense[i] <= -2.5:
+                color = ((255,140,0))
+            else:
+                color = (158,110,189)
+        else:
+            color = (200, 200, 200)
+
+        svg.drawOutRect(grid_start + len(out_dict) * square_width + 20 + len(go_list) * square_width, top_buffer + num * square_height, square_width -1, square_height -1, fill=color, lt=0)
+
+    svg.writeString('Deleterious change >=5', grid_start - 10, top_buffer + (len(gene_list) + 40) * square_height + 0.75 * square_height, 10, justify='right')
+    svg.writeString('Deleterious change 2.5-5', grid_start - 10, top_buffer + (len(gene_list) + 41) * square_height + 0.75 * square_height, 10, justify='right')
+    svg.writeString('Non-deletrious change', grid_start - 10, top_buffer + (len(gene_list) + 42) * square_height + 0.75 * square_height, 10, justify='right')
+    svg.writeString('Restorative change', grid_start - 10, top_buffer + (len(gene_list) + 43) * square_height + 0.75 * square_height, 10, justify='right')
+
+    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 40) * square_height, 9, 9, lt=0, fill=(203,103,81))
+    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 41) * square_height, 9, 9, lt=0, fill=(255,140,0))
+    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 42) * square_height, 9, 9, lt=0, fill=(158,110,189))
+    svg.drawOutRect(grid_start, top_buffer + (len(gene_list) + 43) * square_height, 9, 9, lt=0, fill=(122, 164, 87))
     svg.writesvg(out_label + '.svg')
 
 
 
 
 
-get_genes(sys.argv[1], sys.argv[2], sys.argv[3])
+get_genes(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
 
 
 

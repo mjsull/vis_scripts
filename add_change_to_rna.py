@@ -370,7 +370,7 @@ class scalableVectorGraphics:
 
 
 
-def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, go_dir, panel3):
+def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, rast_annot, rast_sub, panel3):
     the_number, the_pval = int(the_number), float(the_pval)
     with open(diff_file) as diff:
         diff_dict = {}
@@ -579,6 +579,7 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
     loc_dict = {}
     loc_lengths = []
     gap_bp = 20000
+    rast_list = set()
     with open(gbk_file) as gbk:
         for line in gbk:
             line = line.rstrip()
@@ -600,6 +601,7 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
                 gene_name = line.split('"')[1].split('_')[0]
             elif line.startswith('                     /locus_tag="'):
                 locus = line.split('"')[1]
+                rast_list.add((chrom, locus))
             elif line.startswith('                     /inference="similar to AA sequence'):
                 inference = line.split('"')[1].split(':')[-1]
             elif line.startswith('                     /inference="protein motif:Pfam:'):
@@ -626,20 +628,27 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
     go_descriptions = {}
     gene_go = {}
     fam_acc = {}
-    for i in diff_list[:the_number]:
-        go_file = go_dir + '/' + i.split('/')[-1][:-7] + 'GO_GeneID.tsv'
-        with open(go_file) as gf:
-            gf.readline()
-            for line in gf:
-                tn, bp, sn, goid, term, annotated, signif, expected, pval, genesfound, score = line.split('\t')
-                go_descriptions[goid[1:-1]] = term[1:-1]
-                for i in genesfound[1:-1].split(','):
-                    if i in gene_go:
-                        gene_go[i].add(goid[1:-1])
-                    else:
-                        gene_go[i] = set([goid[1:-1]])
-
-
+    fig2locus = {}
+    print rast_list
+    with open(rast_annot) as f:
+        f.readline()
+        for line in f:
+            feature, the_type, contig, start, stop, frame, strand, lenght, function, subsystem, ncbi_gi, locus = line.split('\t')
+            if the_type == 'CDS':
+                locus = locus.split('|')[1].rstrip()
+                if (contig, locus) in rast_list:
+                    fig2locus[feature] = locus
+    with open(rast_sub) as f:
+        f.readline()
+        for line in f:
+            cat, subcat, subsystem, role, features = line.split('\t')
+            features = set(features.split())
+            for i in features:
+                fig = i[:-1]
+                if fig in fig2locus and fig2locus[fig] in gene_go:
+                    gene_go[fig2locus[fig]].add(cat)
+                elif fig in fig2locus:
+                    gene_go[fig2locus[fig]] = set([cat])
     # if not os.path.exists('this_is_an_rna_go_file'):
     #     online_mode = True
     #     out_go = open('this_is_an_rna_go_file', 'w')
@@ -1022,6 +1031,15 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
         y1 = top_buffer + i[-1][1] * old_square_height + old_square_height
         y2 = top_buffer + count * square_height
         # svg.drawPath([400, 420, 600, grid_start], [y1, y1, y2, y2])
+
+    go_list = []
+    go_set = set()
+    for i in gene_list:
+        if i in gene_go:
+            for j in gene_go[i]:
+                go_set.add(j)
+    for i in go_set:
+        go_list.append(i)
     for num, i in enumerate(gene_list):
         if gene_dict[i][0] != 'none':
             gene_name = gene_dict[i][0]
@@ -1083,7 +1101,7 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
     go_descriptions['none'] = 'none'
     for num, i in enumerate(go_list):
         svg.writeString(i, grid_start + 35 + square_width * len(headers) + num * square_width, old_top_buffer - 10, 10, justify='right', rotate=-1)
-        svg.writeString(go_descriptions[i], grid_start + 35 + square_width * len(headers) + num * square_width, len(gene_list) * square_height + 10 + top_buffer, 10, rotate=-1)
+        # svg.writeString(go_descriptions[i], grid_start + 35 + square_width * len(headers) + num * square_width, len(gene_list) * square_height + 10 + top_buffer, 10, rotate=-1)
     # svg.writeString('other', grid_start + 35 + square_width * len(headers) + len(go_list) * square_width, top_buffer - 10, 10, justify='right', rotate=-1)
     # svg.writeString('other', grid_start + 35 + square_width * len(headers) + len(go_list) * square_width, len(gene_list) * square_height + 10 + top_buffer, 10, rotate=-1)
     if not panel3 is None:
@@ -1098,6 +1116,14 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
                 rna_pval_dict[name] = [p1, p2, p3, p4]
                 gene_list.append(name)
         gene_list.sort()
+        go_list = []
+        go_set = set()
+        for i in gene_list:
+            if i in gene_go:
+                for j in gene_go[i]:
+                    go_set.add(j)
+        for i in go_set:
+            go_list.append(i)
         last_loci = 'PROKKA_00000'
         opcolor = (100, 100, 200)
         diff_in_group = False
@@ -1187,7 +1213,7 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
         go_descriptions['none'] = 'none'
         for num, i in enumerate(go_list):
             svg.writeString(i, grid_start + 35 + square_width * len(headers) + num * square_width, old_top_buffer - 10, 10, justify='right', rotate=-1)
-            svg.writeString(go_descriptions[i], grid_start + 35 + square_width * len(headers) + num * square_width, len(gene_list) * square_height + 10 + top_buffer, 10, rotate=-1)
+            # svg.writeString(go_descriptions[i], grid_start + 35 + square_width * len(headers) + num * square_width, len(gene_list) * square_height + 10 + top_buffer, 10, rotate=-1)
 
 
     svg.writeString('Variant upstream ', grid_start - 10, top_buffer + (len(gene_list) + 5) * square_height + 0.75 * square_height, 10, justify='right')
@@ -1236,5 +1262,5 @@ def add_change(diff_file, gbk_file, out_file, the_number, the_pval, diff_list, g
 
 
 
-add_change(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[8:], sys.argv[6], sys.argv[7])
+add_change(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[9:], sys.argv[6], sys.argv[7], sys.argv[8])
 

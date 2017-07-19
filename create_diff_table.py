@@ -419,7 +419,7 @@ class gene:
             self.start = int(start)
             self.stop = int(stop)
             self.strand = '+'
-
+# get genes in a genbank file
 def get_genes(genbank):
     gene_list = []
     get_seq = False
@@ -440,7 +440,8 @@ def get_genes(genbank):
             elif get_seq:
                 outseq += ''.join(line.split()[1:])
     return gene_list, outseq
-
+# get alignments from a MAF file genereated by mugsy - this is used to convert ancestral information from PAML
+# to an actual genome coordinate
 def get_alignments(mugsy_file, num_gen):
     getit = False
     with open(mugsy_file) as mf:
@@ -477,6 +478,7 @@ def get_alignments(mugsy_file, num_gen):
                     aninstance.strand_dict[fasta].append(strand)
     return aninstance
 
+# get the ancestral sequence for a particular node
 def get_ancestral_sequence(rst, label):
     with open(rst) as paml:
         getit = 0
@@ -494,28 +496,21 @@ def get_ancestral_sequence(rst, label):
     return anc_seq
 
 
+# get differecnes between two genbank files using nucmer
 def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, genes2, first_seq, second_seq):
-    merge_snp_size = 5
+    merge_snp_size = 0
     if not os.path.exists(working_dir):
         os.makedirs(working_dir)
     q_name = gbk2.split('/')[-1].split('.')[0]
     with open(working_dir + '/' + q_name + '.fa', 'w') as out:
         out.write('>' + q_name + '\n')
-        with open(gbk2) as gbk:
-            get_seq = False
-            out.write(second_seq)
+        out.write(second_seq)
     r_name = gbk1.split('/')[-1].split('.')[0]
     with open(working_dir + '/' + r_name + '.fa', 'w') as out:
         out.write('>' + r_name + '\n')
         out.write(first_seq)
     subprocess.Popen('nucmer --breaklen=20 --prefix=' + working_dir + '/' + r_name + '_' + q_name + ' ' +
                      working_dir + '/' + r_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('nucmer --breaklen=20 --maxmatch --nosimplify --prefix=' + working_dir + '/' + r_name + '_' + r_name + ' ' +
-    #                  working_dir + '/' + r_name + '.fa ' + working_dir + '/' + r_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('nucmer --breaklen=20 --maxmatch --nosimplify --prefix=' + working_dir + '/' + q_name + '_' + q_name + ' ' +
-    #                  working_dir + '/' + q_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('nucmer --breaklen=20 --prefix=' + working_dir + '/' + r_name + '_' + q_name + ' ' +
-    #                  working_dir + '/' + r_name + '.fa ' + working_dir + '/' + q_name + '.fa', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('delta-filter -g ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' +
                      working_dir + '/' + r_name + '_' + q_name + '.filter.delta', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('delta-filter -r ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' +
@@ -524,59 +519,18 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                      working_dir + '/' + r_name + '_' + q_name + '.q.filter.delta', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-snps -Tlr ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir + '/' + r_name + '_' + q_name + '.snps',
                      shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('show-aligns -r ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir + '/' + r_name + '_' + q_name +
-    #                  '.align ' + r_name + ' ' + q_name,
-    #                  shell=True).wait()#, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.filter.delta > ' + working_dir +
                      '/' + r_name + '_' + q_name + '.filtered.coords', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.r.filter.delta > ' + working_dir +
                      '/' + r_name + '_' + q_name + '.r.filtered.coords', shell=True, stderr=subprocess.PIPE).wait()
     subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.q.filter.delta > ' + working_dir +
                      '/' + r_name + '_' + q_name + '.q.filtered.coords', shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + q_name + '.delta > ' + working_dir + '/' +
-    #                  r_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('show-coords -r ' + working_dir + '/' + r_name + '_' + r_name + '.delta > ' + working_dir + '/' +
-    #                  r_name + '_' + r_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('show-coords -r ' + working_dir + '/' + q_name + '_' + q_name + '.delta > ' + working_dir + '/' +
-    #                  q_name + '_' + q_name + '.coords', shell=True, stderr=subprocess.PIPE).wait()
-    # subprocess.Popen('makeblastdb -dbtype nucl -in ' + working_dir + '/' + r_name + '.fa -out tempdb', shell=True, stdout=subprocess.PIPE).wait()
-    # subprocess.Popen('blastn -outfmt 6 -out ' + q_name + '_' + r_name + '.blast  -query ' + working_dir + '/' + q_name + '.fa -db tempdb', shell=True).wait()
     out_tsv = open(out_file, 'w')
     out_tsv.write('\t'.join(['type', 'query_name', 'query_start', 'query_stop', 'reference_name', 'reference_start',
                              'reference_stop', 'query base/size', 'reference base/size', 'ancestor_base_size',
                              'type', 'in_gene_q', 'in_gene_r', 'overlap_gene_q', 'overlap_gene_r', 'contains_gene_q', 'contains_gene_r',
                             'nearest_upstream_q', 'nearest_upstream_r', 'nearest_downstream_q', 'nearest_downstream_r']) + '\n')
     ignored_char = set(['N', '-'])
-    # with open(working_dir + '/' + r_name + '_' + q_name + '.align') as align:
-    #     qseq = ''
-    #     rseq = ''
-    #     count = -1
-    #     snp_count = 0
-    #     for line in align:
-    #         if line.startswith('-- BEGIN'):
-    #             r_orient = line.split()[4]
-    #             r_start = line.split()[5]
-    #             r_stop = line.split()[7]
-    #             q_orient = line.split()[9]
-    #             q_start = line.split()[10]
-    #             q_stop = line.split()[12]
-    #             count = 0
-    #         elif line.startswith('-- END'):
-    #             count = -1
-    #         elif count == 0:
-    #             snp_count += line.count('^')
-    #             count = 1
-    #         elif count == 1:
-    #             count = 2
-    #         elif count == 2:
-    #             count = 3
-    #             try:
-    #                 rseq += line.split()[1]
-    #             except IndexError:
-    #                 pass
-    #         elif count == 3:
-    #             count = 0
-    #             qseq += line.split()[1]
     with open(working_dir + '/' + r_name + '_' + q_name + '.snps') as snps:
         get_snp_lines = False
         last_del = None
@@ -729,8 +683,10 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                     if i.strand == '+':
                         if translate_dna(first_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
                             mut_type = 'syn_query'
+                        elif translate_dna(mod_seq[i.start-1:i.stop])[-1] != '*':
+                            mut_type = 'nonsyn_query_stop_gain'
                         elif '*' in translate_dna(mod_seq[i.start-1:i.stop])[:-1]:
-                            mut_type = 'nonsyn_query_stop'
+                            mut_type = 'nonsyn_query_stop_loss'
                         else:
                             mut_type = 'nonsyn_query'
                             dna_file.write('>' + i.locus + ',que,' + str(startpos2) + '\n' + translate_dna(first_seq[i.start-1:i.stop])[:-1] + '\n')
@@ -739,8 +695,10 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                         if translate_dna(reverse_compliment(first_seq[i.start-1:i.stop])) == \
                                 translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
                             mut_type = 'syn_query'
+                        elif translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[-1] != '*':
+                            mut_type = 'nonsyn_query_stop_gain'
                         elif '*' in translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1]:
-                            mut_type = 'nonsyn_query_stop'
+                            mut_type = 'nonsyn_query_stop_loss'
                         else:
                             mut_type = 'nonsyn_query'
                             dna_file.write('>' + i.locus + ',que,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(first_seq[i.start-1:i.stop]))[:-1] + '\n')
@@ -768,12 +726,18 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                             mut_type = 'syn_amb'
                         else:
                             mut_type = 'nonsyn_amb'
+                            if b1 != ancestor_base:
+                                dna_file.write('>' + i.locus + ',que,' + str(startpos2) + '\n' + translate_dna(first_seq[i.start-1:i.stop][:-1]) + '\n')
+                                dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(mod_seq[i.start-1:i.stop][:-1]) + '\n')
                     else:
                         if translate_dna(reverse_compliment(first_seq[i.start-1:i.stop])) == \
                                 translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
                             mut_type = 'syn_amb'
                         else:
                             mut_type = 'nonsyn_amb'
+                            if b1 != ancestor_base:
+                                dna_file.write('>' + i.locus + ',que,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(first_seq[i.start-1:i.stop]))[:-1] + '\n')
+                                dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1] + '\n')
             elif startpos1 <= i.start <= i.stop <= endpos1:
                 if up_q is None:
                     up_q = last_gene
@@ -811,21 +775,25 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                     if i.strand == '+':
                         if translate_dna(second_seq[i.start-1:i.stop]) == translate_dna(mod_seq[i.start-1:i.stop]):
                             mut_type = 'syn_ref'
+                        elif translate_dna(mod_seq[i.start-1:i.stop])[-1] != '*':
+                            mut_type = 'nonsyn_ref_stop_gain'
                         elif '*' in translate_dna(mod_seq[i.start-1:i.stop])[:-1]:
-                            mut_type == 'nonsyn_ref_stop'
+                            mut_type == 'nonsyn_ref_stop_loss'
                         else:
-                            dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(second_seq[i.start-1:i.stop])[:-1] + '\n')
-                            dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(mod_seq[i.start-1:i.stop])[:-1] + '\n')
+                            # dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(second_seq[i.start-1:i.stop])[:-1] + '\n')
+                            # dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(mod_seq[i.start-1:i.stop])[:-1] + '\n')
                             mut_type = 'nonsyn_ref'
                     else:
                         if translate_dna(reverse_compliment(second_seq[i.start-1:i.stop])) == \
                                 translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop])):
                             mut_type = 'syn_ref'
+                        elif translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[-1] != '*':
+                            mut_type = 'nonsyn_ref_stop_gain'
                         elif '*' in translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1]:
-                            mut_type = 'nonsyn_ref_stop'
+                            mut_type = 'nonsyn_ref_stop_loss'
                         else:
-                            dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(second_seq[i.start-1:i.stop]))[:-1] + '\n')
-                            dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1] + '\n')
+                            # dna_file.write('>' + i.locus + ',ref,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(second_seq[i.start-1:i.stop]))[:-1] + '\n')
+                            # dna_file.write('>' + i.locus + ',anc,' + str(startpos2) + '\n' + translate_dna(reverse_compliment(mod_seq[i.start-1:i.stop]))[:-1] + '\n')
                             mut_type = 'nonsyn_ref'
                 elif b1 == '.':
                     mut_type = 'deletion_query'
@@ -853,7 +821,7 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                 mut_type = 'intergenic_query'
             else:
                 mut_type = 'intergenic_amb'
-        elif mut_type is None and (in_q == [] or in_r is []):
+        elif (in_q == [] or in_r == []):
             mut_type = 'no_matching_genes'
         if in_q == []:
             in_q = ['none']
@@ -909,9 +877,6 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
                 s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref = line.split()
                 s1, e1, s2, e2, len1, len2 = map(int, (s1, e1, s2, e2, len1, len2))
                 the_coords.append((s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref))
-        print len(first_seq), e1, len(second_seq), e2
-        if e1 != len(first_seq) or e2 != len(second_seq):
-            print len(first_seq), e1, len(second_seq), e2
     for line in the_coords:
         s1, e1, bar, s2, e2, bar, len1, len2, bar, ident, bar, query, ref = line
         in_q = []
@@ -1038,7 +1003,7 @@ def get_diff(gbk1, gbk2, working_dir, out_file, alignment, anc_seq, genes1, gene
         last_end1 = e1
     out_tsv.close()
 
-
+# draw differences
 def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
     top_buffer = 300
     bottom_buffer = 600
@@ -1062,6 +1027,7 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
     syn_col = (90, 147, 191)
     syn_col_low = (218, 231, 241)
     syn_col_high = (57, 108, 147)
+    # dictionaries of colors to use for the figure
     if highlight == 'query':
         colourDictQuery = {
             'deletion_query':nonsyn_col,
@@ -1075,8 +1041,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
             'intergenic_ref':anc_base_col_low,
             'intergenic_query':syn_col_high,
             'intergenic_amb':syn_col,
-            'nonsyn_ref_stop':anc_base_col_low,
-            'nonsyn_query_stop':nonsyn_col_high,
+            'nonsyn_ref_stop_gain':anc_base_col_low,
+            'nonsyn_ref_stop_loss':anc_base_col_low,
+            'nonsyn_query_stop_gain':nonsyn_col_high,
+            'nonsyn_query_stop_loss':nonsyn_col_high,
             'no_matching_genes':nonsyn_col
         }
         colourDictRef = {
@@ -1091,8 +1059,10 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
             'intergenic_ref':syn_col_low,
             'intergenic_query':anc_base_col_high,
             'intergenic_amb':syn_col,
-            'nonsyn_ref_stop':nonsyn_col_low,
-            'nonsyn_query_stop':anc_base_col_high,
+            'nonsyn_ref_stop_gain':nonsyn_col_low,
+            'nonsyn_ref_stop_loss':nonsyn_col_low,
+            'nonsyn_query_stop_gain':anc_base_col_high,
+            'nonsyn_query_stop_loss':anc_base_col_high,
             'no_matching_genes':nonsyn_col
         }
     elif highlight == 'ref':
@@ -1109,7 +1079,8 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
             'intergenic_query':(89,147,190),
             'intergenic_amb':(89,147,190),
             'nonsyn_ref_stop':(193,130,45),
-            'nonsyn_query_stop':(184,110,188),
+            'nonsyn_query_stop_gain':nonsyn_col_high,
+            'nonsyn_query_stop_loss':nonsyn_col_high,
             'no_matching_genes':(184,110,188)
         }
         colourDictRef = {
@@ -1125,7 +1096,8 @@ def draw_diff(diff_file, length1, length2, q_name, r_name, out_file):
             'intergenic_query':(193,130,45),
             'intergenic_amb':(89,147,190),
             'nonsyn_ref_stop':(184,110,188),
-            'nonsyn_query_stop':(193,130,45),
+            'nonsyn_query_stop_gain':nonsyn_col_high,
+            'nonsyn_query_stop_loss':nonsyn_col_high,
             'no_matching_genes':(184,110,188)
         }
     else:
